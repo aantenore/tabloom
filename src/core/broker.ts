@@ -37,6 +37,7 @@ type BrokerListener = (snapshot: BrokerSnapshot, event?: BrokerEvent) => void;
 interface PendingClient<TRequest, TChunk, TResult> {
   readonly deadlineAt: number;
   readonly detachSignal?: () => void;
+  dispatchedEpoch: number;
   readonly payload: TRequest;
   readonly session: ManagedInferenceSession<TChunk, TResult>;
   readonly timeoutHandle: unknown;
@@ -188,6 +189,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
 
     const pendingBase = {
       deadlineAt,
+      dispatchedEpoch: 0,
       payload,
       session,
       timeoutHandle,
@@ -410,10 +412,14 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     }
 
     const epoch = this.#machine.epoch;
+    if (pending.dispatchedEpoch === epoch) {
+      return;
+    }
     const attempt = pending.session.beginAttempt(epoch);
     if (attempt === 0 || pending.session.epoch !== epoch) {
       return;
     }
+    pending.dispatchedEpoch = epoch;
 
     const envelope: RequestEnvelope = {
       attempt,
