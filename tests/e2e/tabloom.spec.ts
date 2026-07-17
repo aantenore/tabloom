@@ -46,7 +46,7 @@ test.describe('TabLoom browser conformance', () => {
     context,
   }, testInfo) => {
     const cluster = await openCluster(context, 2, namespace(testInfo.title), {
-      delay: 80,
+      delay: 250,
     });
     await expectRoles(cluster, 1, 1);
     const peer = await pageWithRole(cluster, 'peer');
@@ -54,7 +54,7 @@ test.describe('TabLoom browser conformance', () => {
 
     await peer.page
       .getByTestId('prompt')
-      .fill('cancel this deliberately long deterministic stream');
+      .fill('cancel this deterministic stream '.repeat(40));
     await peer.page.getByTestId('send').click();
     await expect
       .poll(() => numberText(peer.page, 'chunk-count'))
