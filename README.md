@@ -119,7 +119,7 @@ Run the complete local quality gate:
 corepack pnpm check
 corepack pnpm package:smoke
 corepack pnpm test:browser
-corepack pnpm audit
+corepack pnpm run audit
 ```
 
 ## Evidence and boundaries
