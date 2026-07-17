@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { DeterministicInferenceAdapter } from '../../src/adapters/deterministic.js';
+import { createBrowserBroker } from '../../src/browser.js';
 import { BrowserBroadcastTransport } from '../../src/browser/broadcast-channel-transport.js';
 import {
   BrowserStorageEpochStore,
@@ -70,6 +72,10 @@ const originalBroadcastChannel = Object.getOwnPropertyDescriptor(
   globalThis,
   'BroadcastChannel',
 );
+const originalLocalStorage = Object.getOwnPropertyDescriptor(
+  globalThis,
+  'localStorage',
+);
 
 afterEach(() => {
   if (originalNavigator === undefined) {
@@ -85,6 +91,11 @@ afterEach(() => {
       'BroadcastChannel',
       originalBroadcastChannel,
     );
+  }
+  if (originalLocalStorage === undefined) {
+    Reflect.deleteProperty(globalThis, 'localStorage');
+  } else {
+    Object.defineProperty(globalThis, 'localStorage', originalLocalStorage);
   }
 });
 
@@ -110,6 +121,13 @@ describe('browser adapters', () => {
     };
     const epochs = new BrowserStorageEpochStore('test', storage);
     expect(() => epochs.advance()).toThrowError(
+      expect.objectContaining({ code: 'CAPABILITY_UNAVAILABLE' }),
+    );
+  });
+
+  it('normalizes missing default storage as a capability error', () => {
+    Reflect.deleteProperty(globalThis, 'localStorage');
+    expect(() => new BrowserStorageEpochStore('test')).toThrowError(
       expect.objectContaining({ code: 'CAPABILITY_UNAVAILABLE' }),
     );
   });
@@ -140,6 +158,14 @@ describe('browser adapters', () => {
     const election = new BrowserWebLockElection('test', { advance: () => 1 });
     expect(() => election.start(() => Promise.resolve())).toThrowError(
       TabLoomError,
+    );
+  });
+
+  it('reports a missing navigator as a lock capability error', () => {
+    Reflect.deleteProperty(globalThis, 'navigator');
+    const election = new BrowserWebLockElection('test', { advance: () => 1 });
+    expect(() => election.start(() => Promise.resolve())).toThrowError(
+      expect.objectContaining({ code: 'CAPABILITY_UNAVAILABLE' }),
     );
   });
 
@@ -192,6 +218,37 @@ describe('browser adapters', () => {
     expect(() => new BrowserBroadcastTransport('test')).toThrowError(
       TabLoomError,
     );
+  });
+
+  it('normalizes channel construction failures', () => {
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      value: class FailingBroadcastChannel {
+        constructor() {
+          throw new Error('blocked');
+        }
+      },
+    });
+    expect(() => new BrowserBroadcastTransport('test')).toThrowError(
+      expect.objectContaining({ code: 'CAPABILITY_UNAVAILABLE' }),
+    );
+  });
+
+  it('validates browser configuration before allocating capabilities', () => {
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      value: class FailingBroadcastChannel {
+        constructor() {
+          throw new Error('must not be constructed');
+        }
+      },
+    });
+    expect(() =>
+      createBrowserBroker({
+        adapter: new DeterministicInferenceAdapter(),
+        config: { namespace: 'not valid' },
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'INVALID_CONFIG' }));
   });
 });
 

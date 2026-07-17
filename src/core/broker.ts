@@ -684,18 +684,17 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
         }
       })
       .catch((error: unknown) => {
-        const current = this.#activeOwnerWork.get(envelope.requestId);
-        if (current?.cancelReason === 'lease_lost') {
+        if (active.cancelReason === 'lease_lost') {
           return;
         }
-        if (current?.cancelReason === 'client') {
+        if (active.cancelReason === 'client') {
           this.#sendTerminal(envelope, 'cancelled', undefined, {
             code: 'CANCELLED',
             message: 'The inference request was cancelled.',
           });
           return;
         }
-        if (current?.cancelReason === 'timeout') {
+        if (active.cancelReason === 'timeout') {
           this.#sendTerminal(envelope, 'timed_out', undefined, {
             code: 'TIMEOUT',
             message: 'The inference request timed out.',

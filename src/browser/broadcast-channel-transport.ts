@@ -8,13 +8,24 @@ export class BrowserBroadcastTransport implements TransportPort {
   #listeners = new Set<(envelope: unknown) => void>();
 
   constructor(namespace: string) {
-    if (typeof BroadcastChannel === 'undefined') {
+    const Channel = Reflect.get(globalThis, 'BroadcastChannel') as
+      typeof BroadcastChannel | undefined;
+    if (Channel === undefined) {
       throw new TabLoomError(
         'CAPABILITY_UNAVAILABLE',
         'BroadcastChannel is required for browser coordination.',
       );
     }
-    this.#channel = new BroadcastChannel(`tabloom:${namespace}`);
+    try {
+      this.#channel = new Channel(`tabloom:${namespace}`);
+    } catch (error) {
+      throw new TabLoomError(
+        'CAPABILITY_UNAVAILABLE',
+        'BroadcastChannel could not be initialized.',
+        {},
+        error instanceof Error ? { cause: error } : undefined,
+      );
+    }
     this.#channel.addEventListener(
       'message',
       (event: MessageEvent<unknown>) => {

@@ -4,7 +4,7 @@ import {
   SystemClock,
 } from './adapters/runtime.js';
 import { TabLoomBroker } from './core/broker.js';
-import type { BrokerConfigInput } from './core/config.js';
+import { parseBrokerConfig, type BrokerConfigInput } from './core/config.js';
 import type { InferenceAdapter, TelemetryPort } from './core/types.js';
 import { BrowserBroadcastTransport } from './browser/broadcast-channel-transport.js';
 import {
@@ -21,8 +21,9 @@ export interface BrowserBrokerOptions<TRequest, TChunk, TResult> {
 export function createBrowserBroker<TRequest, TChunk, TResult>(
   options: BrowserBrokerOptions<TRequest, TChunk, TResult>,
 ): TabLoomBroker<TRequest, TChunk, TResult> {
-  const namespace = options.config.namespace;
-  return new TabLoomBroker(options.config, {
+  const config = parseBrokerConfig(options.config);
+  const namespace = config.namespace;
+  return new TabLoomBroker(config, {
     adapter: options.adapter,
     clock: new SystemClock(),
     election: new BrowserWebLockElection(

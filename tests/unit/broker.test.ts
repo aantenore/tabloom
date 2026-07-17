@@ -198,6 +198,51 @@ describe('in-memory broker cluster', () => {
     expect(peer.snapshot.terminalCount).toBe(1);
   });
 
+  it('does not classify lease-loss cancellation as an adapter failure', async () => {
+    const telemetry: CollectingTelemetry[] = [];
+    const cluster = await createCluster(2, {
+      adapterFactory: () => ({
+        descriptor: {
+          evidence: 'deterministic-simulation',
+          id: 'lease-aware',
+          name: 'Lease-aware test adapter',
+          version: '1',
+        },
+        run: (_request, context) =>
+          new Promise<DeterministicResult>((_resolve, reject) => {
+            context.signal.addEventListener(
+              'abort',
+              () => reject(new Error('lease ended')),
+              { once: true },
+            );
+          }),
+      }),
+      telemetryFactory: () => {
+        const collector = new CollectingTelemetry();
+        telemetry.push(collector);
+        return collector;
+      },
+    });
+    await waitFor(() => roles(cluster).peer === 1);
+    const owner = cluster.find((broker) => broker.snapshot.role === 'leader')!;
+    const ownerIndex = cluster.indexOf(owner);
+    const peer = cluster.find((broker) => broker.snapshot.role === 'peer')!;
+    const session = peer.request({ text: 'survive lease loss' });
+    void session.result.catch(() => undefined);
+    await waitFor(() => owner.snapshot.queueDepth === 1);
+    await owner.stop();
+    await waitFor(() =>
+      cluster.some(
+        (broker) => broker !== owner && broker.snapshot.role === 'leader',
+      ),
+    );
+    session.cancel();
+    await expect(session.result).rejects.toMatchObject({ code: 'CANCELLED' });
+    expect(telemetry[ownerIndex]?.events).not.toContainEqual(
+      expect.objectContaining({ kind: 'adapter_failed' }),
+    );
+  });
+
   it('normalizes provider failures', async () => {
     const cluster = await createCluster(2, {
       adapterFactory: () => ({
@@ -270,13 +315,15 @@ async function createCluster(
       DeterministicResult
     >;
     queueCapacity?: number;
+    telemetryFactory?: (identity: string) => CollectingTelemetry;
   } = {},
 ): Promise<TestBroker[]> {
   const election = new InMemoryElectionCoordinator();
   const transport = new InMemoryTransportHub();
   const cluster = Array.from({ length: count }, (_, index) => {
     const identity = `tab-${index + 1}`;
-    const telemetry = new CollectingTelemetry();
+    const telemetry =
+      overrides.telemetryFactory?.(identity) ?? new CollectingTelemetry();
     const broker = new TabLoomBroker<
       DeterministicRequest,
       DeterministicChunk,

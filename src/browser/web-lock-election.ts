@@ -9,9 +9,9 @@ export class BrowserStorageEpochStore implements EpochStore {
   #key: string;
   #storage: Storage;
 
-  constructor(namespace: string, storage: Storage = globalThis.localStorage) {
+  constructor(namespace: string, storage?: Storage) {
     this.#key = `tabloom:${namespace}:epoch`;
-    this.#storage = storage;
+    this.#storage = storage ?? resolveLocalStorage();
   }
 
   advance(): number {
@@ -73,8 +73,12 @@ export class BrowserWebLockElection implements ElectionPort {
     if (this.#started) {
       return Promise.resolve();
     }
-    const lockManager = Reflect.get(navigator, 'locks') as
-      LockManager | undefined;
+    const navigatorValue = Reflect.get(globalThis, 'navigator') as
+      Navigator | undefined;
+    const lockManager =
+      navigatorValue === undefined
+        ? undefined
+        : (Reflect.get(navigatorValue, 'locks') as LockManager | undefined);
     if (lockManager === undefined) {
       throw new TabLoomError(
         'CAPABILITY_UNAVAILABLE',
@@ -121,6 +125,24 @@ export class BrowserWebLockElection implements ElectionPort {
     await this.#campaignTask;
     this.#campaignAbort = undefined;
     this.#campaignTask = undefined;
+  }
+}
+
+function resolveLocalStorage(): Storage {
+  try {
+    const storage = Reflect.get(globalThis, 'localStorage') as
+      Storage | undefined;
+    if (storage === undefined) {
+      throw new Error('Local storage is unavailable.');
+    }
+    return storage;
+  } catch (error) {
+    throw new TabLoomError(
+      'CAPABILITY_UNAVAILABLE',
+      'Same-origin storage is required for fenced leadership.',
+      {},
+      error instanceof Error ? { cause: error } : undefined,
+    );
   }
 }
 
