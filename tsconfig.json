@@ -5,6 +5,7 @@
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
     "ignoreDeprecations": "6.0",
+    "jsx": "react-jsx",
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -12,6 +13,9 @@
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@tabloom": ["./src/index.ts"]
+    },
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
@@ -21,6 +25,8 @@
   },
   "include": [
     "src",
+    "demo",
+    "tests/e2e",
     "tests/unit",
     "playwright.config.ts",
     "vite.config.ts",
