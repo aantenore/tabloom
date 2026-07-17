@@ -12,7 +12,7 @@ export default defineConfig({
   minify: false,
   outDir: 'dist',
   sourcemap: true,
-  splitting: false,
+  splitting: true,
   target: 'es2022',
   treeshake: true,
 });

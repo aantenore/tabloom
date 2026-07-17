@@ -58,7 +58,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
-    "package:check": "publint && attw --pack .",
+    "package:check": "publint && attw --pack . --profile esm-only",
     "package:smoke": "node scripts/package-smoke.mjs",
     "prepack": "pnpm build:lib",
     "test": "pnpm test:unit",

@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
+    "allowJs": true,
     "allowImportingTsExtensions": false,
+    "checkJs": true,
     "declaration": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
@@ -26,6 +28,7 @@
   "include": [
     "src",
     "demo",
+    "scripts",
     "tests/e2e",
     "tests/unit",
     "playwright.config.ts",
