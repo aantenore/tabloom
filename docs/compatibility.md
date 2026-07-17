@@ -13,10 +13,14 @@ MDN classifies both [Web Locks](https://developer.mozilla.org/en-US/docs/Web/API
 
 ## Release evidence
 
-| Browser  | Coordination demo | Real model adapter |
-| -------- | ----------------- | ------------------ |
-| Chromium | Targeted in CI    | Not yet verified   |
-| Firefox  | Targeted in CI    | Not yet verified   |
-| WebKit   | Targeted in CI    | Not yet verified   |
+Playwright 1.61.1 executed the same four multi-page scenarios in every engine on 2026-07-17.
+
+| Browser engine | Version       | One owner + stream | Cancel + drain | Backpressure | Takeover + single terminal | Real model adapter |
+| -------------- | ------------- | ------------------ | -------------- | ------------ | -------------------------- | ------------------ |
+| Chromium       | 149.0.7827.55 | Pass               | Pass           | Pass         | Pass                       | Not yet verified   |
+| Firefox        | 151.0         | Pass               | Pass           | Pass         | Pass                       | Not yet verified   |
+| WebKit         | 26.5          | Pass               | Pass           | Pass         | Pass                       | Not yet verified   |
 
 The deterministic adapter is the only release-gated adapter in the first alpha. WebLLM and Transformers.js remain documented integration seams until dedicated runtime tests are added.
+
+This matrix reports bundled test engines, not every vendor browser build or mobile lifecycle policy. CI reruns the scenarios on every pull request and `main` update.
