@@ -73,7 +73,7 @@ test.describe('TabLoom browser conformance', () => {
   }, testInfo) => {
     const cluster = await openCluster(context, 3, namespace(testInfo.title), {
       capacity: 1,
-      delay: 120,
+      delay: 1_000,
     });
     await expectRoles(cluster, 1, 2);
     const peers = await pagesWithRole(cluster, 'peer');
