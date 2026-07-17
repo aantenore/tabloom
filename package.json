@@ -1,0 +1,96 @@
+{
+  "name": "@aantenore/tabloom",
+  "version": "0.1.0-alpha.1",
+  "description": "A fenced, same-origin broker for sharing browser inference across tabs.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Antonio Antenore <ant_ant95@hotmail.it>",
+  "homepage": "https://github.com/aantenore/tabloom#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aantenore/tabloom.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aantenore/tabloom/issues"
+  },
+  "keywords": [
+    "browser",
+    "broadcastchannel",
+    "inference",
+    "multi-tab",
+    "web-locks",
+    "webgpu"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.13.0",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters.d.ts",
+      "import": "./dist/adapters.js"
+    }
+  },
+  "scripts": {
+    "audit": "pnpm audit --prod --audit-level=high",
+    "build": "pnpm build:lib && pnpm build:demo",
+    "build:demo": "vite build",
+    "build:lib": "tsup",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build && pnpm package:check",
+    "dev": "vite",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . --max-warnings 0",
+    "package:check": "publint && attw --pack .",
+    "package:smoke": "node scripts/package-smoke.mjs",
+    "prepack": "pnpm build:lib",
+    "test": "pnpm test:unit",
+    "test:all": "pnpm test:unit && pnpm test:browser",
+    "test:browser": "playwright test",
+    "test:browser:chromium": "playwright test --project=chromium",
+    "test:unit": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.demo.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@arethetypeswrong/cli": "0.18.5",
+    "@playwright/test": "1.61.1",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.3",
+    "@vitest/coverage-v8": "4.1.10",
+    "eslint": "10.0.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.3",
+    "prettier": "3.9.5",
+    "publint": "0.3.21",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "tsup": "8.5.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.64.0",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

@@ -1,0 +1,24 @@
+name: Bug report
+description: Report reproducible broker behavior without private inference content.
+title: 'bug: '
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: TabLoom version
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Use synthetic inputs and safe event metadata only.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+    validations:
+      required: true
