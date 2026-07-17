@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    name: Verify and publish prerelease assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm package:smoke
+      - run: pnpm audit
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm test:browser
+      - name: Build archive and checksum
+        shell: bash
+        run: |
+          mkdir release
+          pnpm pack --pack-destination release --silent
+          version="${GITHUB_REF_NAME#v}"
+          archive="$(find release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          mv "$archive" "release/tabloom-${version}.tgz"
+          cd release
+          sha256sum "tabloom-${version}.tgz" > "tabloom-${version}.tgz.sha256"
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --prerelease --generate-notes
