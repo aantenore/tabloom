@@ -14,13 +14,13 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'tabloom-package-'));
 const consumerRoot = join(temporaryRoot, 'consumer');
-const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const pnpmCli = process.env.npm_execpath;
+assert.ok(pnpmCli, 'Run this smoke through the package manager script.');
 
 try {
   execFileSync(
-    pnpmCommand,
-    ['pack', '--pack-destination', temporaryRoot, '--silent'],
+    process.execPath,
+    [pnpmCli, 'pack', '--pack-destination', temporaryRoot, '--silent'],
     { cwd: repositoryRoot, stdio: 'pipe' },
   );
   const archive = readdirSync(temporaryRoot).find((entry) =>
@@ -38,12 +38,12 @@ try {
     }),
   );
   execFileSync(
-    npmCommand,
+    process.execPath,
     [
-      'install',
+      pnpmCli,
+      'add',
       '--ignore-scripts',
-      '--no-audit',
-      '--no-fund',
+      '--silent',
       join(temporaryRoot, archive),
     ],
     { cwd: consumerRoot, stdio: 'pipe' },
