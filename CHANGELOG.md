@@ -2,6 +2,12 @@
 
 All notable changes are documented here.
 
+## [0.3.0-alpha.2] - 2026-07-19
+
+### Changed
+
+- Browser admission-control conformance now uses an active-session barrier and deterministic cleanup, removing timing-dependent WebKit retries.
+
 ## [0.3.0-alpha.1] - 2026-07-19
 
 ### Added
