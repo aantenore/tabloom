@@ -45,6 +45,16 @@ export default tseslint.config(
     },
   },
   {
+    files: ['examples/vite-webllm/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.starter-lint.json'],
+        projectService: false,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
     files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
