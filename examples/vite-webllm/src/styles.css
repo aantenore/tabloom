@@ -1,0 +1,156 @@
+:root {
+  color: #e8eef4;
+  background: #071014;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at 80% 10%,
+      rgb(27 121 111 / 28%),
+      transparent 28rem
+    ),
+    #071014;
+}
+
+main {
+  width: min(960px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 5rem 0 3rem;
+}
+
+header {
+  max-width: 760px;
+}
+
+.eyebrow,
+dt,
+label {
+  color: #63dec9;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0.5rem 0 1rem;
+  font-size: clamp(2.25rem, 6vw, 4.75rem);
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.lede,
+footer {
+  color: #9fb0bb;
+  line-height: 1.65;
+}
+
+.runtime,
+.prompt-card {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border: 1px solid #263940;
+  border-radius: 1rem;
+  background: rgb(12 27 33 / 84%);
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 20%);
+}
+
+dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+dd {
+  overflow-wrap: anywhere;
+  margin: 0.35rem 0 0;
+}
+
+.status {
+  margin: 1.25rem 0 0;
+  color: #b9fff2;
+}
+
+.status.error {
+  color: #ff9f92;
+}
+
+form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+textarea,
+pre {
+  width: 100%;
+  border: 1px solid #314b54;
+  border-radius: 0.75rem;
+  color: inherit;
+  background: #08161b;
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+  padding: 1rem;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+button {
+  padding: 0.75rem 1rem;
+  border: 1px solid #63dec9;
+  border-radius: 999px;
+  color: #06110f;
+  background: #63dec9;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button.secondary {
+  color: #b9fff2;
+  background: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+pre {
+  min-height: 7rem;
+  margin: 1rem 0 0;
+  padding: 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+footer {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+}
