@@ -5,11 +5,16 @@ export interface EpochStore {
   advance(): number | Promise<number>;
 }
 
+export interface StorageLike {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
 export class BrowserStorageEpochStore implements EpochStore {
   #key: string;
-  #storage: Storage;
+  #storage: StorageLike;
 
-  constructor(namespace: string, storage?: Storage) {
+  constructor(namespace: string, storage?: StorageLike) {
     this.#key = `tabloom:${namespace}:epoch`;
     this.#storage = storage ?? resolveLocalStorage();
   }
@@ -134,10 +139,10 @@ export class BrowserWebLockElection implements ElectionPort {
   }
 }
 
-function resolveLocalStorage(): Storage {
+function resolveLocalStorage(): StorageLike {
   try {
     const storage = Reflect.get(globalThis, 'localStorage') as
-      Storage | undefined;
+      StorageLike | undefined;
     if (storage === undefined) {
       throw new Error('Local storage is unavailable.');
     }

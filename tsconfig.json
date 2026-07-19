@@ -33,6 +33,7 @@
     "tests/live",
     "tests/unit",
     "playwright.config.ts",
+    "playwright.preview.config.ts",
     "playwright.webllm.config.ts",
     "vite.config.ts",
     "vitest.config.ts",

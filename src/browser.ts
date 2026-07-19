@@ -39,6 +39,7 @@ export {
   BrowserStorageEpochStore,
   BrowserWebLockElection,
   type EpochStore,
+  type StorageLike,
 } from './browser/web-lock-election.js';
 export {
   IndexedDbEpochStore,

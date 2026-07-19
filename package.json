@@ -1,7 +1,7 @@
 {
   "name": "@aantenore/tabloom",
-  "version": "0.2.0-alpha.1",
-  "description": "A fenced, same-origin broker for sharing browser inference across tabs.",
+  "version": "0.3.0-alpha.1",
+  "description": "A provider-neutral control plane for one fenced browser inference runtime across pages and SharedWorkers.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Antonio Antenore <ant_ant95@hotmail.it>",
@@ -16,8 +16,11 @@
   "keywords": [
     "browser",
     "broadcastchannel",
+    "fencing",
+    "indexeddb",
     "inference",
     "multi-tab",
+    "sharedworker",
     "web-locks",
     "webgpu"
   ],
@@ -43,6 +46,14 @@
       "types": "./dist/browser.d.ts",
       "import": "./dist/browser.js"
     },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
+    },
+    "./shared-worker": {
+      "types": "./dist/shared-worker.d.ts",
+      "import": "./dist/shared-worker.js"
+    },
     "./adapters/webllm": {
       "types": "./dist/webllm.d.ts",
       "import": "./dist/webllm.js"
@@ -65,10 +76,12 @@
     "package:check": "publint && attw --pack . --profile esm-only",
     "package:smoke": "node scripts/package-smoke.mjs",
     "prepack": "pnpm build:lib",
+    "preview": "vite preview",
     "test": "pnpm test:unit",
     "test:all": "pnpm test:unit && pnpm test:browser",
     "test:browser": "playwright test",
     "test:browser:chromium": "playwright test --project=chromium",
+    "test:browser:preview": "playwright test --config=playwright.preview.config.ts",
     "test:live:webllm": "playwright test --config=playwright.webllm.config.ts",
     "test:unit": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.demo.json --noEmit"

@@ -24,11 +24,16 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          test "$GITHUB_REF_NAME" = "v${package_version}"
       - run: pnpm check
       - run: pnpm package:smoke
       - run: pnpm run audit
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
-      - run: pnpm test:browser
+      - run: pnpm test:browser:preview
       - name: Build archive and checksum
         shell: bash
         run: |

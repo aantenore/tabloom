@@ -6,7 +6,9 @@ export default defineConfig({
   entry: {
     adapters: 'src/adapters.ts',
     browser: 'src/browser.ts',
+    core: 'src/core.ts',
     index: 'src/index.ts',
+    'shared-worker': 'src/shared-worker.ts',
     webllm: 'src/adapters/webllm.ts',
   },
   format: ['esm'],
