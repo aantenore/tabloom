@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'tabloom-package-'));
@@ -364,8 +364,13 @@ try {
     [pnpmCli, 'audit', '--prod', '--audit-level=high'],
     { cwd: starterRoot, stdio: 'pipe' },
   );
-  const localArchiveUrl = pathToFileURL(join(temporaryRoot, archive)).href;
-  starterPackage.dependencies['@aantenore/tabloom'] = localArchiveUrl;
+  const localArchiveSpecifier = `file:${relative(
+    starterRoot,
+    join(temporaryRoot, archive),
+  )
+    .split(sep)
+    .join('/')}`;
+  starterPackage.dependencies['@aantenore/tabloom'] = localArchiveSpecifier;
   writeFileSync(
     starterPackagePath,
     `${JSON.stringify(starterPackage, null, 2)}\n`,
@@ -383,7 +388,7 @@ try {
   );
   assert.ok(
     readFileSync(join(starterRoot, 'pnpm-lock.yaml'), 'utf8').includes(
-      localArchiveUrl,
+      localArchiveSpecifier,
     ),
     'The current-source build must resolve TabLoom from the freshly packed local archive.',
   );

@@ -1,0 +1,11 @@
+{
+  "extends": "./examples/vite-webllm/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@aantenore/tabloom/adapters/webllm": ["./src/adapters/webllm.ts"],
+      "@aantenore/tabloom/core": ["./src/core.ts"],
+      "@aantenore/tabloom/shared-worker": ["./src/shared-worker.ts"]
+    }
+  },
+  "include": ["examples/vite-webllm/src", "examples/vite-webllm/vite.config.ts"]
+}
