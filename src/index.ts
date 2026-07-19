@@ -17,6 +17,14 @@ export {
   type ProtocolEnvelope,
 } from './core/protocol.js';
 export {
+  createRuntimeFingerprint,
+  parseRuntimeFingerprint,
+  runtimeFingerprintSchema,
+  type RuntimeFingerprint,
+  type RuntimeFingerprintComponents,
+} from './core/runtime-fingerprint.js';
+export { TABLOOM_PROTOCOL_VERSION } from './core/version.js';
+export {
   initialBrokerMachineState,
   transitionBrokerState,
   type BrokerMachineAction,
@@ -39,6 +47,7 @@ export type {
   LeadershipLease,
   PeerSnapshot,
   RequestOptions,
+  RuntimeCompatibility,
   SafeTelemetryEvent,
   TelemetryPort,
   TerminalStatus,

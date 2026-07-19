@@ -7,6 +7,7 @@ import {
   BrowserWebLockElection,
 } from '../../src/browser/web-lock-election.js';
 import { TabLoomError } from '../../src/core/errors.js';
+import { TEST_RUNTIME_FINGERPRINT } from '../runtime-fixture.js';
 
 class MemoryStorage implements Storage {
   #values = new Map<string, string>();
@@ -193,10 +194,11 @@ describe('browser adapters', () => {
     first.send({
       kind: 'presence',
       messageId: 'message-1',
-      protocolVersion: 1,
+      protocolVersion: 2,
+      runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
       sentAt: 1,
       sourceId: 'tab-a',
-      supportedVersions: [1],
+      supportedVersions: [2],
     });
     await expect(received).resolves.toMatchObject({ kind: 'presence' });
     first.close();
@@ -204,10 +206,11 @@ describe('browser adapters', () => {
     first.send({
       kind: 'presence',
       messageId: 'ignored',
-      protocolVersion: 1,
+      protocolVersion: 2,
+      runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
       sentAt: 2,
       sourceId: 'tab-a',
-      supportedVersions: [1],
+      supportedVersions: [2],
     });
     expect(() => first.subscribe(() => undefined)).toThrowError(TabLoomError);
     second.close();
@@ -246,7 +249,10 @@ describe('browser adapters', () => {
     expect(() =>
       createBrowserBroker({
         adapter: new DeterministicInferenceAdapter(),
-        config: { namespace: 'not valid' },
+        config: {
+          namespace: 'not valid',
+          runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
+        },
       }),
     ).toThrowError(expect.objectContaining({ code: 'INVALID_CONFIG' }));
   });

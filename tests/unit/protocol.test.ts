@@ -3,6 +3,7 @@ import {
   isProtocolCompatible,
   parseProtocolEnvelope,
 } from '../../src/core/protocol.js';
+import { TEST_RUNTIME_FINGERPRINT } from '../runtime-fixture.js';
 
 describe('protocol validation', () => {
   it('accepts a bounded presence envelope', () => {
@@ -10,12 +11,13 @@ describe('protocol validation', () => {
       parseProtocolEnvelope({
         kind: 'presence',
         messageId: 'message-1',
-        protocolVersion: 1,
+        protocolVersion: 2,
+        runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
         sentAt: 1,
         sourceId: 'tab-a',
-        supportedVersions: [1],
+        supportedVersions: [2],
       }),
-    ).toMatchObject({ kind: 'presence', supportedVersions: [1] });
+    ).toMatchObject({ kind: 'presence', supportedVersions: [2] });
   });
 
   it.each([
@@ -26,6 +28,7 @@ describe('protocol validation', () => {
       kind: 'presence',
       messageId: 'message-1',
       protocolVersion: 0,
+      runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
       sentAt: 1,
       sourceId: 'tab-a',
       supportedVersions: [],

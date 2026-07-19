@@ -3,6 +3,7 @@ import type { ProtocolEnvelope } from './protocol.js';
 
 export type BrokerRole = 'candidate' | 'leader' | 'peer' | 'stopped';
 export type BrokerReadiness = 'idle' | 'initializing' | 'ready' | 'stopped';
+export type RuntimeCompatibility = 'compatible' | 'mismatch' | 'unknown';
 export type TerminalStatus =
   | 'backpressure'
   | 'cancelled'
@@ -98,10 +99,12 @@ export interface BrokerSnapshot {
   readonly config: BrokerConfig;
   readonly epoch: number;
   readonly knownPeers: readonly PeerSnapshot[];
+  readonly leaderAdapter?: AdapterDescriptor;
   readonly leaderId?: string;
   readonly queueDepth: number;
   readonly readiness: BrokerReadiness;
   readonly role: BrokerRole;
+  readonly runtimeCompatibility: RuntimeCompatibility;
   readonly tabId: string;
   readonly terminalCount: number;
 }
@@ -118,6 +121,7 @@ export type BrokerEventType =
   | 'protocol-rejected'
   | 'request'
   | 'retry'
+  | 'runtime-rejected'
   | 'stale-rejected'
   | 'timed-out';
 

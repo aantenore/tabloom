@@ -7,6 +7,7 @@ export const tabLoomErrorCodes = [
   'INVALID_CONFIG',
   'NO_LEADER',
   'PROTOCOL_MISMATCH',
+  'RUNTIME_MISMATCH',
   'TIMEOUT',
 ] as const;
 

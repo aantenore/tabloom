@@ -21,6 +21,7 @@ import type {
   ElectionPort,
   InferenceAdapter,
 } from '../../src/core/types.js';
+import { TEST_RUNTIME_FINGERPRINT } from '../runtime-fixture.js';
 
 type TestBroker = TabLoomBroker<
   DeterministicRequest,
@@ -84,6 +85,7 @@ describe('in-memory broker cluster', () => {
         leaderTimeoutMs: 150,
         namespace: 'startup-rollback',
         requestTimeoutMs: 1_000,
+        runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
       },
       {
         adapter: new DeterministicInferenceAdapter({ defaultChunkDelayMs: 0 }),
@@ -152,6 +154,29 @@ describe('in-memory broker cluster', () => {
     await expect(session.result).resolves.toMatchObject({
       text: 'Woven once: local',
     });
+  });
+
+  it('rejects a leader with a different runtime fingerprint', async () => {
+    const alternateFingerprint = `sha256:${'1'.repeat(64)}`;
+    const cluster = await createCluster(2, {
+      runtimeFingerprintFactory: (identity) =>
+        identity === 'tab-1' ? TEST_RUNTIME_FINGERPRINT : alternateFingerprint,
+    });
+    const owner = cluster[0]!;
+    const peer = cluster[1]!;
+    await waitFor(() => peer.snapshot.runtimeCompatibility === 'mismatch');
+
+    expect(owner.snapshot.runtimeCompatibility).toBe('compatible');
+    expect(peer.snapshot).toMatchObject({
+      leaderAdapter: owner.snapshot.adapter,
+      leaderId: owner.snapshot.tabId,
+      runtimeCompatibility: 'mismatch',
+    });
+    const session = peer.request({ text: 'must not execute' });
+    await expect(session.result).rejects.toMatchObject({
+      code: 'RUNTIME_MISMATCH',
+    });
+    expect(owner.snapshot.queueDepth).toBe(0);
   });
 
   it('rejects work beyond configured capacity', async () => {
@@ -353,6 +378,7 @@ describe('in-memory broker cluster', () => {
         leaderTimeoutMs: 150,
         namespace: 'isolated',
         requestTimeoutMs: 100,
+        runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
       },
       {
         adapter: new DeterministicInferenceAdapter(),
@@ -386,6 +412,7 @@ async function createCluster(
       DeterministicResult
     >;
     queueCapacity?: number;
+    runtimeFingerprintFactory?: (identity: string) => string;
     telemetryFactory?: (identity: string) => CollectingTelemetry;
   } = {},
 ): Promise<TestBroker[]> {
@@ -406,6 +433,9 @@ async function createCluster(
         namespace: 'unit-cluster',
         queueCapacity: overrides.queueCapacity ?? 8,
         requestTimeoutMs: 2_000,
+        runtimeFingerprint:
+          overrides.runtimeFingerprintFactory?.(identity) ??
+          TEST_RUNTIME_FINGERPRINT,
       },
       {
         adapter:
@@ -438,6 +468,7 @@ function createBrokerFixture(identity: string): TestBroker {
       leaderTimeoutMs: 150,
       namespace: identity,
       requestTimeoutMs: 1_000,
+      runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
     },
     {
       adapter: new DeterministicInferenceAdapter({ defaultChunkDelayMs: 0 }),

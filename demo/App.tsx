@@ -15,6 +15,7 @@ import { Controls } from './components/Controls.js';
 import { Timeline } from './components/Timeline.js';
 import { Topology } from './components/Topology.js';
 import { LoomMark, ShieldIcon } from './icons.js';
+import { DEMO_RUNTIME_FINGERPRINT } from './runtime.js';
 
 type DemoSession = InferenceSession<DeterministicChunk, DeterministicResult>;
 
@@ -49,6 +50,7 @@ export function App() {
           namespace: config.namespace,
           queueCapacity: config.capacity,
           requestTimeoutMs: 12_000,
+          runtimeFingerprint: DEMO_RUNTIME_FINGERPRINT,
         },
         telemetry,
       }),
@@ -259,6 +261,8 @@ function statusForError(code: TabLoomError['code']): string {
       return 'timed out';
     case 'PROTOCOL_MISMATCH':
       return 'protocol mismatch';
+    case 'RUNTIME_MISMATCH':
+      return 'runtime mismatch';
     case 'ADAPTER_FAILED':
       return 'adapter failed';
     case 'BROKER_STOPPED':

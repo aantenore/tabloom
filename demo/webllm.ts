@@ -1,5 +1,6 @@
 import { WebLlmInferenceAdapter } from '../src/adapters/webllm.js';
 import { createBrowserBroker } from '../src/browser.js';
+import { createRuntimeFingerprint } from '../src/core/runtime-fingerprint.js';
 
 const DEFAULT_MODEL_ID = 'SmolLM2-360M-Instruct-q4f16_1-MLC';
 
@@ -60,6 +61,12 @@ async function runLiveLab(): Promise<void> {
         elements.progress.textContent = progressMessage(progress);
       },
     });
+    const runtimeFingerprint = await createRuntimeFingerprint({
+      adapter: 'webllm@0.2.84',
+      build: 'tabloom-webllm-live-lab-v1',
+      configuration: 'default',
+      model: modelId,
+    });
     const broker = createBrowserBroker({
       adapter,
       config: {
@@ -69,6 +76,7 @@ async function runLiveLab(): Promise<void> {
         namespace,
         queueCapacity: 2,
         requestTimeoutMs: 180_000,
+        runtimeFingerprint,
       },
     });
     let active = false;

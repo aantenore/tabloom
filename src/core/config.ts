@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { TabLoomError } from './errors.js';
+import { runtimeFingerprintSchema } from './runtime-fingerprint.js';
+import { TABLOOM_PROTOCOL_VERSION } from './version.js';
 
 const brokerConfigSchema = z
   .object({
@@ -15,9 +17,12 @@ const brokerConfigSchema = z
         /^[a-zA-Z0-9._-]+$/,
         'Use letters, digits, dot, underscore, or dash.',
       ),
-    protocolVersion: z.number().int().positive().max(65_535).default(1),
+    protocolVersion: z
+      .literal(TABLOOM_PROTOCOL_VERSION)
+      .default(TABLOOM_PROTOCOL_VERSION),
     queueCapacity: z.number().int().min(1).max(1_024).default(8),
     requestTimeoutMs: z.number().int().min(100).max(600_000).default(30_000),
+    runtimeFingerprint: runtimeFingerprintSchema,
   })
   .superRefine((value, context) => {
     if (value.leaderTimeoutMs < value.heartbeatIntervalMs * 2) {

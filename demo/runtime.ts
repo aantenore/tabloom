@@ -1,0 +1,2 @@
+export const DEMO_RUNTIME_FINGERPRINT =
+  'sha256:bd97fbba284706821da6ff2fd09e86a9c6f9d423eac97218ce8a74f864ab73e6';

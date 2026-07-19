@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { runtimeFingerprintSchema } from './runtime-fingerprint.js';
 
 const baseEnvelopeSchema = z.object({
   messageId: z.string().min(1).max(160),
   protocolVersion: z.number().int().positive().max(65_535),
+  runtimeFingerprint: runtimeFingerprintSchema,
   sentAt: z.number().finite().nonnegative(),
   sourceId: z.string().min(1).max(160),
 });

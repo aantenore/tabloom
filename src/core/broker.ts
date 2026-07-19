@@ -66,6 +66,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
   #ownerQueue: RequestEnvelope[] = [];
   #pendingClients = new Map<string, PendingClient<TRequest, TChunk, TResult>>();
   #presenceHandle?: unknown;
+  #runtimeMismatch: LeaderEnvelope | undefined;
   #started = false;
   #startTask: Promise<void> | undefined;
   #terminated = false;
@@ -92,6 +93,12 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     }
     knownPeers.sort((left, right) => left.id.localeCompare(right.id));
 
+    const runtimeCompatibility =
+      this.#runtimeMismatch !== undefined
+        ? 'mismatch'
+        : this.#machine.role === 'leader' || this.#leader !== undefined
+          ? 'compatible'
+          : 'unknown';
     const base = {
       adapter: this.#dependencies.adapter.descriptor,
       config: this.config,
@@ -100,12 +107,19 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       queueDepth: this.#ownerQueue.length + this.#activeOwnerWork.size,
       readiness: this.#machine.readiness,
       role: this.#machine.role,
+      runtimeCompatibility,
       tabId: this.tabId,
       terminalCount: this.#terminalCount,
     } as const;
-    return this.#machine.leaderId === undefined
-      ? base
-      : { ...base, leaderId: this.#machine.leaderId };
+    const withLeader =
+      this.#machine.leaderId === undefined
+        ? base
+        : { ...base, leaderId: this.#machine.leaderId };
+    const leaderAdapter =
+      this.#leader?.adapter ?? this.#runtimeMismatch?.adapter;
+    return leaderAdapter === undefined
+      ? withLeader
+      : { ...withLeader, leaderAdapter };
   }
 
   subscribe(listener: BrokerListener): () => void {
@@ -308,6 +322,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     }
     this.#electionTask = undefined;
     this.#leader = undefined;
+    this.#runtimeMismatch = undefined;
     this.#knownPeers.clear();
     this.#machine = transitionBrokerState(this.#machine, { type: 'stop' });
     this.#notify();
@@ -320,6 +335,27 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       return;
     }
     if (envelope.sourceId === this.tabId) {
+      return;
+    }
+
+    if (
+      envelope.kind !== 'leader' &&
+      envelope.protocolVersion !== this.config.protocolVersion
+    ) {
+      this.#record({
+        kind: 'message_rejected',
+        reason: 'protocol-mismatch',
+      });
+      return;
+    }
+    if (
+      envelope.kind !== 'leader' &&
+      envelope.runtimeFingerprint !== this.config.runtimeFingerprint
+    ) {
+      this.#record({
+        kind: 'message_rejected',
+        reason: 'runtime-mismatch',
+      });
       return;
     }
 
@@ -358,6 +394,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
         type: 'leadership-granted',
       });
       this.#leader = undefined;
+      this.#runtimeMismatch = undefined;
       this.#record({ epoch: lease.epoch, kind: 'leader_acquired' });
       this.#notify({
         at: this.#dependencies.clock.now(),
@@ -428,6 +465,40 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       return;
     }
 
+    if (envelope.runtimeFingerprint !== this.config.runtimeFingerprint) {
+      const next = transitionBrokerState(this.#machine, {
+        epoch: envelope.epoch,
+        leaderId: envelope.sourceId,
+        readiness: envelope.readiness,
+        type: 'leader-observed',
+      });
+      if (next === this.#machine) {
+        this.#notify({
+          at: this.#dependencies.clock.now(),
+          epoch: envelope.epoch,
+          sourceId: envelope.sourceId,
+          type: 'stale-rejected',
+        });
+        return;
+      }
+      this.#machine = next;
+      this.#leader = undefined;
+      this.#runtimeMismatch = envelope;
+      this.#record({
+        epoch: envelope.epoch,
+        kind: 'message_rejected',
+        reason: 'runtime-mismatch',
+      });
+      this.#rejectPendingRuntimeMismatch();
+      this.#notify({
+        at: this.#dependencies.clock.now(),
+        epoch: envelope.epoch,
+        sourceId: envelope.sourceId,
+        type: 'runtime-rejected',
+      });
+      return;
+    }
+
     const previousEpoch = this.#machine.epoch;
     const previousLeaderId = this.#machine.leaderId;
     const next = transitionBrokerState(this.#machine, {
@@ -448,6 +519,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
 
     this.#machine = next;
     this.#leader = envelope;
+    this.#runtimeMismatch = undefined;
     if (previousEpoch !== next.epoch || previousLeaderId !== next.leaderId) {
       this.#record({ epoch: envelope.epoch, kind: 'leader_changed' });
       this.#notify({
@@ -473,6 +545,10 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
   #dispatchClient(requestId: string): void {
     const pending = this.#pendingClients.get(requestId);
     if (pending === undefined || pending.session.isTerminal) {
+      return;
+    }
+    if (this.#runtimeMismatch !== undefined) {
+      this.#rejectPendingRuntimeMismatch();
       return;
     }
 
@@ -505,6 +581,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       messageId: this.#dependencies.ids.next(),
       payload: pending.payload,
       protocolVersion: this.config.protocolVersion,
+      runtimeFingerprint: this.config.runtimeFingerprint,
       requestId,
       sentAt: this.#dependencies.clock.now(),
       sourceId: this.tabId,
@@ -541,6 +618,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
         kind: 'cancel',
         messageId: this.#dependencies.ids.next(),
         protocolVersion: this.config.protocolVersion,
+        runtimeFingerprint: this.config.runtimeFingerprint,
         reason,
         requestId,
         sentAt: this.#dependencies.clock.now(),
@@ -616,6 +694,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       kind: 'accepted',
       messageId: this.#dependencies.ids.next(),
       protocolVersion: this.config.protocolVersion,
+      runtimeFingerprint: this.config.runtimeFingerprint,
       queueDepth: this.#activeOwnerWork.size + this.#ownerQueue.length,
       requestId: envelope.requestId,
       sentAt: this.#dependencies.clock.now(),
@@ -732,6 +811,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
             kind: 'chunk',
             messageId: this.#dependencies.ids.next(),
             protocolVersion: this.config.protocolVersion,
+            runtimeFingerprint: this.config.runtimeFingerprint,
             requestId: envelope.requestId,
             sentAt: this.#dependencies.clock.now(),
             sequence,
@@ -806,6 +886,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
         | 'CAPABILITY_UNAVAILABLE'
         | 'INVALID_CONFIG'
         | 'NO_LEADER'
+        | 'RUNTIME_MISMATCH'
       >;
       readonly message: string;
     },
@@ -817,6 +898,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       kind: 'terminal',
       messageId: this.#dependencies.ids.next(),
       protocolVersion: this.config.protocolVersion,
+      runtimeFingerprint: this.config.runtimeFingerprint,
       requestId: request.requestId,
       sentAt: this.#dependencies.clock.now(),
       sourceId: this.tabId,
@@ -973,6 +1055,33 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     this.#pendingClients.delete(requestId);
   }
 
+  #rejectPendingRuntimeMismatch(): void {
+    const mismatch = this.#runtimeMismatch;
+    if (mismatch === undefined) {
+      return;
+    }
+    const error = new TabLoomError(
+      'RUNTIME_MISMATCH',
+      'The observed owner has a different runtime fingerprint.',
+    );
+    for (const requestId of [...this.#pendingClients.keys()]) {
+      const pending = this.#pendingClients.get(requestId);
+      if (pending === undefined || pending.session.isTerminal) {
+        continue;
+      }
+      pending.session.stop(error);
+      this.#terminalCount += 1;
+      this.#deletePendingClient(requestId);
+      this.#notify({
+        at: this.#dependencies.clock.now(),
+        epoch: mismatch.epoch,
+        requestId,
+        sourceId: mismatch.sourceId,
+        type: 'runtime-rejected',
+      });
+    }
+  }
+
   #sendPresence(): void {
     if (!this.#started) {
       return;
@@ -981,6 +1090,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       kind: 'presence',
       messageId: this.#dependencies.ids.next(),
       protocolVersion: this.config.protocolVersion,
+      runtimeFingerprint: this.config.runtimeFingerprint,
       sentAt: this.#dependencies.clock.now(),
       sourceId: this.tabId,
       supportedVersions: [this.config.protocolVersion],
@@ -998,6 +1108,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       kind: 'leader',
       messageId: this.#dependencies.ids.next(),
       protocolVersion: this.config.protocolVersion,
+      runtimeFingerprint: this.config.runtimeFingerprint,
       queueDepth: this.#ownerQueue.length + this.#activeOwnerWork.size,
       readiness: this.#machine.readiness === 'ready' ? 'ready' : 'initializing',
       sentAt: this.#dependencies.clock.now(),
