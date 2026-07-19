@@ -7,6 +7,7 @@ export default defineConfig({
     adapters: 'src/adapters.ts',
     browser: 'src/browser.ts',
     index: 'src/index.ts',
+    webllm: 'src/adapters/webllm.ts',
   },
   format: ['esm'],
   minify: false,

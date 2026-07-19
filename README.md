@@ -8,7 +8,9 @@ TabLoom is a same-origin browser inference broker. It coordinates sibling pages 
 
 It supplies the coordination layer, not a model runtime: exclusive ownership, monotonic fencing epochs, protocol validation, bounded admission, streaming sessions, cancellation, timeouts, takeover, and privacy-safe telemetry.
 
-> **Alpha:** the release-gated adapter is deterministic simulation. WebLLM and Transformers.js are documented integration seams, not verified GPU or model evidence.
+The core stays provider-neutral. A deterministic adapter exercises lifecycle behavior in every CI job, while a dedicated optional adapter composes [WebLLM 0.2.84](https://github.com/mlc-ai/web-llm) without bundling it into the core package.
+
+> **Alpha:** the WebLLM path is verified separately on Chrome/WebGPU with an actual model. It is not a compatibility claim for every browser, GPU, model, or future WebLLM version. Transformers.js remains an unverified integration seam.
 
 ## Why
 
@@ -34,11 +36,11 @@ flowchart LR
 
 ## Install the prerelease archive
 
-The first alpha is distributed as a GitHub release archive rather than an npm registry publication.
+The alpha is distributed as a GitHub release archive rather than an npm registry publication.
 
 ```bash
-curl -LO https://github.com/aantenore/tabloom/releases/download/v0.1.0-alpha.1/tabloom-0.1.0-alpha.1.tgz
-pnpm add ./tabloom-0.1.0-alpha.1.tgz
+curl -LO https://github.com/aantenore/tabloom/releases/download/v0.2.0-alpha.1/tabloom-0.2.0-alpha.1.tgz
+pnpm add ./tabloom-0.2.0-alpha.1.tgz
 ```
 
 Verify the adjacent `.sha256` asset before installing in a controlled delivery pipeline.
@@ -83,6 +85,47 @@ try {
 
 The deterministic adapter makes lifecycle behavior reproducible. Replace it with an application adapter for a real runtime; see [adapter integrations](docs/integrations.md).
 
+## Optional WebLLM adapter
+
+Install the tested peer explicitly, then import only the dedicated subpath:
+
+```bash
+pnpm add @mlc-ai/web-llm@0.2.84
+```
+
+```ts
+import { createBrowserBroker } from '@aantenore/tabloom';
+import { WebLlmInferenceAdapter } from '@aantenore/tabloom/adapters/webllm';
+
+const broker = createBrowserBroker({
+  adapter: new WebLlmInferenceAdapter({
+    modelId: 'SmolLM2-360M-Instruct-q4f16_1-MLC',
+    onProgress: ({ progress, text }) => {
+      console.log(Math.round(progress * 100), text);
+    },
+  }),
+  config: {
+    maxConcurrent: 1,
+    namespace: 'my-app-webllm',
+    queueCapacity: 4,
+    requestTimeoutMs: 180_000,
+  },
+});
+
+await broker.start();
+const session = broker.request({
+  messages: [{ role: 'user', content: 'Explain fenced ownership.' }],
+  stream_options: { include_usage: true },
+});
+
+for await (const chunk of session) {
+  console.log(chunk.choices[0]?.delta.content ?? '');
+}
+console.log(await session.result);
+```
+
+The host chooses the model, model source, runtime config, cache policy, and prompt history. The request cannot switch the configured model. Keep `maxConcurrent: 1`: WebLLM interruption is engine-wide and the adapter rejects a competing generation.
+
 ## Session semantics
 
 | Concern                  | Alpha contract                                                                                     |
@@ -100,7 +143,7 @@ The deterministic adapter makes lifecycle behavior reproducible. Replace it with
 
 Serve from HTTPS, or loopback for development. The alpha requires Web Locks, BroadcastChannel, local storage, and cryptographic UUID support in the same storage partition.
 
-The multi-page suite is locally verified with Playwright 1.61.1 against Chromium 149.0.7827.55, Firefox 151.0, and WebKit 26.5. Each engine exercises one-owner convergence, peer streaming, cancellation, backpressure, and owner takeover.
+The deterministic multi-page suite is locally verified with Playwright 1.61.1 against Chromium 149.0.7827.55, Firefox 151.0, and WebKit 26.5. Each engine exercises one-owner convergence, peer streaming, cancellation, backpressure, and owner takeover. The separate live lab targets installed Chrome with WebGPU; see the [compatibility matrix](docs/compatibility.md).
 
 ## Development
 
@@ -120,6 +163,14 @@ corepack pnpm check
 corepack pnpm package:smoke
 corepack pnpm test:browser
 corepack pnpm run audit
+```
+
+Run the opt-in real-model gate only when downloading the configured model is acceptable:
+
+```bash
+TABLOOM_WEBLLM_LIVE=1 \
+TABLOOM_WEBLLM_MODEL=SmolLM2-360M-Instruct-q4f16_1-MLC \
+corepack pnpm test:live:webllm
 ```
 
 ## Evidence and boundaries

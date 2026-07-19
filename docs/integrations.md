@@ -62,18 +62,22 @@ The adapter should:
 - Avoid logging inputs or chunks through the telemetry port.
 - Be safe for at-least-once execution after takeover, or enforce idempotency at its own side-effect boundary.
 
-## WebLLM seam
+## Shipped WebLLM adapter
 
-[WebLLM](https://github.com/mlc-ai/web-llm) already supplies model loading, caching, WebGPU execution, and OpenAI-shaped chat streaming. A TabLoom adapter can map the contract as follows:
+[WebLLM](https://github.com/mlc-ai/web-llm) already supplies model loading, caching, WebGPU execution, and OpenAI-shaped chat streaming. TabLoom ships an optional adapter at `@aantenore/tabloom/adapters/webllm`, pinned to the verified `0.2.84` contract.
 
-| TabLoom hook         | WebLLM responsibility                                                     |
-| -------------------- | ------------------------------------------------------------------------- |
-| `initialize(signal)` | Create one engine and select a model in the elected page                  |
-| `run(request, ctx)`  | Start a streaming chat completion; emit each delta through `ctx.emit`     |
-| `ctx.signal`         | Stop consuming the stream and call the runtime interruption API if needed |
-| `dispose()`          | Unload model resources before releasing ownership                         |
+| TabLoom hook         | WebLLM responsibility                                                             |
+| -------------------- | --------------------------------------------------------------------------------- |
+| `initialize(signal)` | Create one engine and load the configured model only in the elected page          |
+| `run(request, ctx)`  | Stream OpenAI-shaped chunks, aggregate choice zero, and retain final usage        |
+| `ctx.signal`         | Interrupt generation, drain the provider iterator, then report typed cancellation |
+| `dispose()`          | Wait for active generation cleanup, unload resources, then release ownership      |
 
-This repository does not install WebLLM, choose a model, or claim runtime compatibility in the alpha. Pin a tested WebLLM version in the consuming application and add model-specific browser tests before changing the evidence label.
+The package declares WebLLM as an optional exact peer. It uses a lazy import during owner initialization, so importing TabLoom or the adapter subpath does not load or bundle the provider. The host must install the peer, choose the model and cache policy, and provide the complete conversation history on every request.
+
+The adapter deliberately fixes the configured model, `n = 1`, and streaming mode after merging the request. Keep the broker at `maxConcurrent: 1`, because WebLLM serializes work per model and its interruption API applies to the engine rather than one arbitrary request.
+
+Do not place `ServiceWorkerMLCEngine` behind this adapter. WebLLM's service-worker topology and TabLoom's elected-page ownership are alternative runtime ownership strategies. TabLoom is useful when the application needs provider-neutral fencing, bounded admission, observable page ownership, and takeover semantics.
 
 ## Transformers.js seam
 
@@ -87,3 +91,5 @@ Pipeline input/output shapes differ substantially by task. Keep that schema in t
 - The core package remains small and does not force WebGPU on consumers.
 - Provider upgrades do not change the coordination protocol.
 - The deterministic adapter keeps failure and takeover tests reproducible on CI runners without GPU claims.
+
+See [ADR 0002](adr/0002-optional-webllm-adapter.md) for the dependency and lifecycle decision.

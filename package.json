@@ -1,6 +1,6 @@
 {
   "name": "@aantenore/tabloom",
-  "version": "0.1.0-alpha.1",
+  "version": "0.2.0-alpha.1",
   "description": "A fenced, same-origin broker for sharing browser inference across tabs.",
   "type": "module",
   "license": "Apache-2.0",
@@ -43,6 +43,10 @@
       "types": "./dist/browser.d.ts",
       "import": "./dist/browser.js"
     },
+    "./adapters/webllm": {
+      "types": "./dist/webllm.d.ts",
+      "import": "./dist/webllm.js"
+    },
     "./adapters": {
       "types": "./dist/adapters.d.ts",
       "import": "./dist/adapters.js"
@@ -65,15 +69,25 @@
     "test:all": "pnpm test:unit && pnpm test:browser",
     "test:browser": "playwright test",
     "test:browser:chromium": "playwright test --project=chromium",
+    "test:live:webllm": "playwright test --config=playwright.webllm.config.ts",
     "test:unit": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.demo.json --noEmit"
   },
   "dependencies": {
     "zod": "4.4.3"
   },
+  "peerDependencies": {
+    "@mlc-ai/web-llm": "0.2.84"
+  },
+  "peerDependenciesMeta": {
+    "@mlc-ai/web-llm": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "@eslint/js": "10.0.1",
     "@arethetypeswrong/cli": "0.18.5",
+    "@eslint/js": "10.0.1",
+    "@mlc-ai/web-llm": "0.2.84",
     "@playwright/test": "1.61.1",
     "@types/node": "26.1.1",
     "@types/react": "19.2.17",

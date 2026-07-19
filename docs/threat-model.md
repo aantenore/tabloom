@@ -25,6 +25,7 @@
 | Sensitive content reaches diagnostics | Telemetry type excludes payload fields; demo stores counts and lengths only | Application adapters can violate their own logging policy          |
 | Identifier collision                  | Cryptographic browser IDs by default                                        | Custom ID providers must preserve uniqueness                       |
 | Cross-site leakage                    | Browser origin and storage-partition isolation                              | Compromised same-origin script remains in scope                    |
+| Provider runtime survives owner loss  | Lease loss aborts work; WebLLM adapter interrupts, drains, then unloads     | Browser or GPU-driver failure can delay resource reclamation       |
 
 ## Security non-claims
 
@@ -36,3 +37,4 @@ TabLoom is not a sandbox, authorization service, or isolation boundary for mutua
 - Older epochs cannot complete a current session.
 - Capacity, cancellation, timeout, and takeover have regression tests.
 - Dependency and package audits run in CI.
+- Package smoke verifies the optional WebLLM provider is not bundled into the adapter entry.

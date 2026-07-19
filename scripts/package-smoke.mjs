@@ -3,8 +3,10 @@ import { execFileSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -59,18 +61,38 @@ try {
       } from '@aantenore/tabloom';
       import { BrowserBroadcastTransport } from '@aantenore/tabloom/browser';
       import { DeterministicInferenceAdapter as AdapterSubpath } from '@aantenore/tabloom/adapters';
+      import { WebLlmInferenceAdapter } from '@aantenore/tabloom/adapters/webllm';
 
       assert.equal(typeof TabLoomBroker, 'function');
       assert.equal(typeof createBrowserBroker, 'function');
       assert.equal(typeof BrowserBroadcastTransport, 'function');
       assert.equal(AdapterSubpath, DeterministicInferenceAdapter);
       assert.equal(new DeterministicInferenceAdapter().descriptor.evidence, 'deterministic-simulation');
+      assert.equal(new WebLlmInferenceAdapter({ modelId: 'consumer-model' }).descriptor.evidence, 'provider-runtime');
     `,
   );
   execFileSync(process.execPath, ['smoke.mjs'], {
     cwd: consumerRoot,
     stdio: 'pipe',
   });
+  const webLlmEntry = join(
+    consumerRoot,
+    'node_modules',
+    '@aantenore',
+    'tabloom',
+    'dist',
+    'webllm.js',
+  );
+  assert.ok(
+    statSync(webLlmEntry).size < 64_000,
+    'The optional WebLLM runtime was bundled into the adapter entry.',
+  );
+  assert.ok(
+    /import\(["']@mlc-ai\/web-llm["']\)/u.test(
+      readFileSync(webLlmEntry, 'utf8'),
+    ),
+    'The optional provider import must remain lazy.',
+  );
   console.log(`Package smoke passed: ${archive}`);
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });

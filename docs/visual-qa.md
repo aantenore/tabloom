@@ -1,6 +1,6 @@
 # Visual QA ledger
 
-Reviewed 2026-07-17.
+Reviewed 2026-07-19.
 
 ## Method
 
@@ -31,3 +31,12 @@ Reviewed 2026-07-17.
 ## Result
 
 Pass. The implementation preserves the concept's visual system and primary information architecture while making copy, interactions, accessibility labels, and responsive behavior executable.
+
+## WebLLM live lab
+
+The opt-in provider page was inspected at a 1280 × 720 Playwright Chrome viewport with two pages sharing one namespace.
+
+- Owner view exposed role, readiness, provider evidence, WebGPU availability, selected model, peer count, and provider progress without showing prompt content in diagnostics.
+- Peer view kept generation controls disabled until broker readiness, then displayed the exact streamed result and completed terminal state.
+- The compact dark surface remained readable with the long model identifier and the generated response wrapped without horizontal overflow.
+- No synthetic throughput or memory figure was added; token usage and lifecycle assertions remain hidden test evidence rather than decorative UI metrics.

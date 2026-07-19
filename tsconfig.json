@@ -30,8 +30,10 @@
     "demo",
     "scripts",
     "tests/e2e",
+    "tests/live",
     "tests/unit",
     "playwright.config.ts",
+    "playwright.webllm.config.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "tsup.config.ts"

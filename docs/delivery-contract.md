@@ -26,6 +26,7 @@ Should:
 - Keep election, transport, clock, identity, telemetry, and inference runtime replaceable.
 - Supply a visual demo that makes ownership and request lineage understandable.
 - Document optional WebLLM and Transformers.js adapter seams without bundling either runtime.
+- Supply a lazy, optional WebLLM adapter whose model and runtime policy remain host configuration.
 
 Out of scope:
 
@@ -37,22 +38,24 @@ Out of scope:
 
 ## Requirements and verification
 
-| ID  | Requirement  | Priority | Acceptance criterion                                              | Verification               |
-| --- | ------------ | -------- | ----------------------------------------------------------------- | -------------------------- |
-| R1  | Single owner | Must     | Three live pages expose one owner and two peers                   | Playwright multi-page test |
-| R2  | Fencing      | Must     | A lower epoch cannot mutate a newer session                       | Unit and takeover tests    |
-| R3  | Streaming    | Must     | A peer receives ordered chunks and one terminal result            | Unit and browser tests     |
-| R4  | Admission    | Must     | Work beyond configured capacity fails with a typed error          | Unit and browser tests     |
-| R5  | Cancellation | Must     | Queued or active work can be cancelled                            | Unit and browser tests     |
-| R6  | Timeout      | Must     | Expired work reaches one terminal timeout state                   | Unit test                  |
-| R7  | Takeover     | Must     | Owner closure elects a successor and pending work can complete    | Browser test               |
-| R8  | Versioning   | Must     | Unsupported protocol traffic is rejected before adapter execution | Unit test                  |
-| R9  | Privacy      | Must     | Telemetry schemas cannot carry inference content                  | Type review and unit test  |
-| R10 | Packaging    | Must     | ESM package installs and imports in a clean consumer              | Package smoke test         |
+| ID  | Requirement        | Priority | Acceptance criterion                                                                                      | Verification                            |
+| --- | ------------------ | -------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| R1  | Single owner       | Must     | Three live pages expose one owner and two peers                                                           | Playwright multi-page test              |
+| R2  | Fencing            | Must     | A lower epoch cannot mutate a newer session                                                               | Unit and takeover tests                 |
+| R3  | Streaming          | Must     | A peer receives ordered chunks and one terminal result                                                    | Unit and browser tests                  |
+| R4  | Admission          | Must     | Work beyond configured capacity fails with a typed error                                                  | Unit and browser tests                  |
+| R5  | Cancellation       | Must     | Queued or active work can be cancelled                                                                    | Unit and browser tests                  |
+| R6  | Timeout            | Must     | Expired work reaches one terminal timeout state                                                           | Unit test                               |
+| R7  | Takeover           | Must     | Owner closure elects a successor and pending work can complete                                            | Browser test                            |
+| R8  | Versioning         | Must     | Unsupported protocol traffic is rejected before adapter execution                                         | Unit test                               |
+| R9  | Privacy            | Must     | Telemetry schemas cannot carry inference content                                                          | Type review and unit test               |
+| R10 | Packaging          | Must     | ESM package installs and imports in a clean consumer                                                      | Package smoke test                      |
+| R11 | Provider isolation | Must     | Core and WebLLM subpath import without bundling or eagerly loading the provider                           | Package smoke and bundle-size assertion |
+| R12 | Real runtime seam  | Should   | One Chrome/WebGPU owner serves a peer request through WebLLM with matching stream/result and one terminal | Opt-in live Playwright test             |
 
 ## Acceptance threshold
 
-All must-level requirements pass; unit coverage meets configured thresholds; lint, types, builds, package checks, dependency audit, and the supported browser matrix pass; no known critical or high-severity defect remains. Real-runtime compatibility stays documented as unverified until exercised separately.
+All must-level requirements pass; unit coverage meets configured thresholds; lint, types, builds, package checks, dependency audit, and the supported deterministic browser matrix pass; no known critical or high-severity defect remains. Real-runtime evidence records the exact browser, provider, model, GPU report, and date instead of expanding into a generic compatibility claim.
 
 ## Delivery mode
 
