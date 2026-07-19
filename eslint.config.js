@@ -10,6 +10,7 @@ export default tseslint.config(
       'dist/**',
       'dist-demo/**',
       'eslint.config.js',
+      'examples/vite-webllm/**',
       'playwright-report/**',
       'test-results/**',
     ],

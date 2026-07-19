@@ -52,6 +52,11 @@ pnpm add ./tabloom-0.3.0-alpha.2.tgz
 
 Verify the adjacent `.sha256` asset before installing in a controlled delivery pipeline.
 
+For a complete Vite consumer using only public package exports, start with the
+[pinned WebLLM starter](examples/vite-webllm/README.md). Its page and
+SharedWorker share one configuration manifest and the repository package smoke
+builds it against a freshly packed TabLoom archive.
+
 ## Quick start
 
 ```ts

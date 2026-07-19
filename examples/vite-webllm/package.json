@@ -1,0 +1,23 @@
+{
+  "name": "tabloom-vite-webllm-starter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.13.0",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@aantenore/tabloom": "https://github.com/aantenore/tabloom/releases/download/v0.3.0-alpha.2/tabloom-0.3.0-alpha.2.tgz",
+    "@mlc-ai/web-llm": "0.2.84"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vite": "8.1.5"
+  }
+}

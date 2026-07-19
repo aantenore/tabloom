@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A clean Vite consumer for TabLoom and a pinned WebLLM runtime."
+    />
+    <title>TabLoom WebLLM starter</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Verified consumer starter</p>
+        <h1>One local model runtime, shared across sibling pages.</h1>
+        <p class="lede">
+          This Vite app consumes only TabLoom's public package exports and keeps
+          the model, runtime identity, broker policy, and generation defaults in
+          one replaceable configuration module.
+        </p>
+      </header>
+
+      <section class="runtime" aria-label="Runtime status">
+        <dl>
+          <div>
+            <dt>Model</dt>
+            <dd data-field="model">not loaded</dd>
+          </div>
+          <div>
+            <dt>Topology</dt>
+            <dd data-field="topology">starting</dd>
+          </div>
+          <div>
+            <dt>Role</dt>
+            <dd data-field="role">starting</dd>
+          </div>
+          <div>
+            <dt>Readiness</dt>
+            <dd data-field="readiness">starting</dd>
+          </div>
+          <div>
+            <dt>Epoch</dt>
+            <dd data-field="epoch">0</dd>
+          </div>
+        </dl>
+        <p class="status" data-field="status" aria-live="polite">
+          Checking browser capabilities.
+        </p>
+      </section>
+
+      <section class="prompt-card" aria-label="Local inference prompt">
+        <form data-field="form">
+          <label for="prompt">Prompt</label>
+          <textarea id="prompt" data-field="prompt" rows="5">
+Explain why fenced ownership matters in one concise paragraph.</textarea>
+          <div class="actions">
+            <button data-field="submit" type="submit" disabled>
+              Run locally
+            </button>
+            <button data-field="peer" type="button" class="secondary">
+              Open sibling page
+            </button>
+          </div>
+        </form>
+        <pre data-field="output" aria-live="polite">Waiting for a request.</pre>
+      </section>
+
+      <footer>
+        Alpha boundary: WebGPU, the pinned provider runtime, and the configured
+        model are required. Automatic cloud fallback is intentionally absent.
+      </footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
