@@ -11,6 +11,8 @@ export const tabLoomErrorCodes = [
   'RUNTIME_MISMATCH',
   'START_FAILED',
   'TIMEOUT',
+  'TOPOLOGY_UNAVAILABLE',
+  'TRANSPORT_FAILED',
 ] as const;
 
 export type TabLoomErrorCode = (typeof tabLoomErrorCodes)[number];

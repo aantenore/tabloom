@@ -11,6 +11,7 @@ import {
   type CancelEnvelope,
   type ChunkEnvelope,
   type LeaderEnvelope,
+  type ProtocolEnvelope,
   type RequestEnvelope,
   type TerminalEnvelope,
 } from './protocol.js';
@@ -71,6 +72,8 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
   #startTask: Promise<void> | undefined;
   #terminated = false;
   #terminalCount = 0;
+  #terminalFailure: TabLoomError | undefined;
+  #unsubscribeTransportFailure: (() => void) | undefined;
   #unsubscribeTransport: (() => void) | undefined;
 
   constructor(
@@ -166,9 +169,13 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
           this.#handleRawEnvelope(input);
         },
       );
+      this.#unsubscribeTransportFailure =
+        this.#dependencies.transport.subscribeFailures?.((error) => {
+          this.#handleTransportFailure(error);
+        });
       this.#sendPresence();
       this.#presenceHandle = this.#dependencies.clock.setInterval(
-        () => this.#sendPresence(),
+        () => this.#sendPresenceSafely(),
         this.config.heartbeatIntervalMs,
       );
       const electionTask = this.#dependencies.election.start(
@@ -282,10 +289,16 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       try {
         await startTask;
       } catch {
-        return;
+        // Failed startup already rolled back; explicit stop still closes ports.
       }
     }
     if (!this.#started) {
+      if (!this.#terminated) {
+        this.#terminated = true;
+        this.#machine = transitionBrokerState(this.#machine, { type: 'stop' });
+        this.#dependencies.transport.close();
+        this.#notify();
+      }
       return;
     }
     this.#started = false;
@@ -301,6 +314,8 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     }
     this.#unsubscribeTransport?.();
     this.#unsubscribeTransport = undefined;
+    this.#unsubscribeTransportFailure?.();
+    this.#unsubscribeTransportFailure = undefined;
 
     const stoppedError = new TabLoomError(
       'BROKER_STOPPED',
@@ -323,7 +338,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     }
   }
 
-  async #rollbackStart(): Promise<unknown | undefined> {
+  async #rollbackStart(): Promise<unknown> {
     this.#started = false;
     if (this.#presenceHandle !== undefined) {
       this.#dependencies.clock.clearInterval(this.#presenceHandle);
@@ -335,8 +350,10 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     }
     this.#unsubscribeTransport?.();
     this.#unsubscribeTransport = undefined;
+    this.#unsubscribeTransportFailure?.();
+    this.#unsubscribeTransportFailure = undefined;
     this.#abortOwnerWorkForLeaseLoss();
-    let cleanupError: unknown | undefined;
+    let cleanupError: unknown;
     try {
       await this.#dependencies.election.stop();
     } catch (error) {
@@ -443,6 +460,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     } catch (error) {
       const safeError = asTabLoomError(error);
       this.#record({ kind: 'adapter_failed', reason: safeError.code });
+      queueMicrotask(() => this.#handleElectionFailure(safeError));
     } finally {
       if (this.#heartbeatHandle !== undefined) {
         this.#dependencies.clock.clearInterval(this.#heartbeatHandle);
@@ -459,7 +477,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     }
   }
 
-  async #handleElectionFailure(error: unknown): Promise<void> {
+  #handleElectionFailure(error: unknown): void {
     if (!this.#started) {
       return;
     }
@@ -472,22 +490,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
             {},
             error instanceof Error ? { cause: error } : undefined,
           );
-    for (const requestId of [...this.#pendingClients.keys()]) {
-      const pending = this.#pendingClients.get(requestId);
-      pending?.session.stop(safeError);
-      this.#terminalCount += pending === undefined ? 0 : 1;
-      this.#deletePendingClient(requestId);
-    }
-    this.#record({ kind: 'broker_failed', reason: safeError.code });
-    this.#notify({
-      at: this.#dependencies.clock.now(),
-      type: 'failed',
-    });
-    try {
-      await this.stop();
-    } catch {
-      // stop() already performs its terminal cleanup in a finally block.
-    }
+    this.#failBroker(safeError);
   }
 
   #observeLeader(envelope: LeaderEnvelope): void {
@@ -651,7 +654,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     if (ownLeader) {
       this.#handleOwnerRequest(envelope);
     } else {
-      this.#dependencies.transport.send(envelope);
+      this.#sendTransport(envelope);
     }
   }
 
@@ -680,8 +683,8 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       };
       if (this.#machine.role === 'leader') {
         this.#handleOwnerCancel(envelope);
-      } else {
-        this.#dependencies.transport.send(envelope);
+      } else if (!this.#sendTransport(envelope)) {
+        return;
       }
     }
 
@@ -943,6 +946,8 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
         | 'NO_LEADER'
         | 'RUNTIME_MISMATCH'
         | 'START_FAILED'
+        | 'TOPOLOGY_UNAVAILABLE'
+        | 'TRANSPORT_FAILED'
       >;
       readonly message: string;
     },
@@ -978,7 +983,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     if (envelope.clientId === this.tabId) {
       this.#handleClientEnvelope(envelope);
     } else {
-      this.#dependencies.transport.send(envelope);
+      this.#sendTransport(envelope);
     }
   }
 
@@ -1153,24 +1158,88 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     });
   }
 
+  #sendPresenceSafely(): void {
+    if (!this.#started) {
+      return;
+    }
+    this.#sendTransport({
+      kind: 'presence',
+      messageId: this.#dependencies.ids.next(),
+      protocolVersion: this.config.protocolVersion,
+      runtimeFingerprint: this.config.runtimeFingerprint,
+      sentAt: this.#dependencies.clock.now(),
+      sourceId: this.tabId,
+      supportedVersions: [this.config.protocolVersion],
+    });
+  }
+
   #broadcastLeader(): void {
     if (this.#machine.role !== 'leader') {
       return;
     }
-    this.#dependencies.transport.send({
-      adapter: this.#dependencies.adapter.descriptor,
-      capacity: this.config.queueCapacity,
-      epoch: this.#machine.epoch,
-      kind: 'leader',
-      messageId: this.#dependencies.ids.next(),
-      protocolVersion: this.config.protocolVersion,
-      runtimeFingerprint: this.config.runtimeFingerprint,
-      queueDepth: this.#ownerQueue.length + this.#activeOwnerWork.size,
-      readiness: this.#machine.readiness === 'ready' ? 'ready' : 'initializing',
-      sentAt: this.#dependencies.clock.now(),
-      sourceId: this.tabId,
-    });
+    if (
+      !this.#sendTransport({
+        adapter: this.#dependencies.adapter.descriptor,
+        capacity: this.config.queueCapacity,
+        epoch: this.#machine.epoch,
+        kind: 'leader',
+        messageId: this.#dependencies.ids.next(),
+        protocolVersion: this.config.protocolVersion,
+        runtimeFingerprint: this.config.runtimeFingerprint,
+        queueDepth: this.#ownerQueue.length + this.#activeOwnerWork.size,
+        readiness:
+          this.#machine.readiness === 'ready' ? 'ready' : 'initializing',
+        sentAt: this.#dependencies.clock.now(),
+        sourceId: this.tabId,
+      })
+    ) {
+      return;
+    }
     this.#notify();
+  }
+
+  #sendTransport(envelope: ProtocolEnvelope): boolean {
+    try {
+      this.#dependencies.transport.send(envelope);
+      return true;
+    } catch (error) {
+      this.#handleTransportFailure(error);
+      return false;
+    }
+  }
+
+  #handleTransportFailure(error: unknown): void {
+    const safeError =
+      error instanceof TabLoomError
+        ? error
+        : new TabLoomError(
+            'TRANSPORT_FAILED',
+            'The broker transport failed.',
+            {},
+            error instanceof Error ? { cause: error } : undefined,
+          );
+    this.#failBroker(safeError);
+  }
+
+  #failBroker(error: TabLoomError): void {
+    if (!this.#started || this.#terminalFailure !== undefined) {
+      return;
+    }
+    this.#terminalFailure = error;
+    for (const requestId of [...this.#pendingClients.keys()]) {
+      const pending = this.#pendingClients.get(requestId);
+      pending?.session.stop(error);
+      this.#terminalCount += pending === undefined ? 0 : 1;
+      this.#deletePendingClient(requestId);
+    }
+    this.#record({ kind: 'broker_failed', reason: error.code });
+    this.#notify({
+      at: this.#dependencies.clock.now(),
+      type: 'broker-failed',
+    });
+    void this.stop().catch(() => {
+      // stop() performs terminal transport cleanup in its finally block.
+    });
   }
 
   #notify(event?: BrokerEvent): void {

@@ -50,6 +50,7 @@ export interface ElectionPort {
 export interface TransportPort {
   close(): void;
   send(envelope: ProtocolEnvelope): void;
+  subscribeFailures?(listener: (error: unknown) => void): () => void;
   subscribe(listener: (envelope: unknown) => void): () => void;
 }
 
@@ -116,6 +117,7 @@ export interface BrokerSnapshot {
 export type BrokerEventType =
   | 'accepted'
   | 'backpressure'
+  | 'broker-failed'
   | 'cancelled'
   | 'chunk'
   | 'completed'

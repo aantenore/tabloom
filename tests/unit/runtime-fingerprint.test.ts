@@ -4,6 +4,7 @@ import {
   createRuntimeFingerprint,
   parseRuntimeFingerprint,
 } from '../../src/core/runtime-fingerprint.js';
+import { TABLOOM_PROTOCOL_VERSION } from '../../src/core/version.js';
 import { TEST_RUNTIME_FINGERPRINT } from '../runtime-fixture.js';
 
 const originalCryptoDescriptor = Object.getOwnPropertyDescriptor(
@@ -47,6 +48,29 @@ describe('runtime fingerprints', () => {
     expect(() => parseRuntimeFingerprint('SHA256:invalid')).toThrowError(
       TabLoomError,
     );
+  });
+
+  it('orders manifest keys by deterministic ASCII code units', async () => {
+    const fingerprint = await createRuntimeFingerprint({
+      aa: 'lower',
+      a_: 'punctuation',
+      aZ: 'upper',
+    });
+    const manifest = JSON.stringify([
+      ['protocolVersion', String(TABLOOM_PROTOCOL_VERSION)],
+      ['aZ', 'upper'],
+      ['a_', 'punctuation'],
+      ['aa', 'lower'],
+    ]);
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(manifest),
+    );
+    const expected = Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+
+    expect(fingerprint).toBe(`sha256:${expected}`);
   });
 
   it.each([

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="TabLoom adaptive SharedWorker browser inference laboratory."
+    />
+    <meta name="theme-color" content="#07121f" />
+    <title>TabLoom SharedWorker Lab</title>
+    <link rel="stylesheet" href="./shared-worker.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero-card">
+        <p class="eyebrow">Adaptive topology lab</p>
+        <h1>One fenced runtime beyond page lifetime</h1>
+        <p>
+          Three tabs negotiate one fingerprinted SharedWorker host and fall back
+          before startup only when the worker topology is unavailable.
+        </p>
+      </header>
+      <section class="status-grid" aria-label="Runtime status">
+        <article>
+          <span>Topology</span><strong id="topology">connecting</strong>
+        </article>
+        <article>
+          <span>Fallback</span><strong id="fallback">none</strong>
+        </article>
+        <article><span>Role</span><strong id="role">stopped</strong></article>
+        <article>
+          <span>Readiness</span><strong id="readiness">idle</strong>
+        </article>
+        <article><span>Leader</span><strong id="leader-id"></strong></article>
+        <article><span>Tab</span><strong id="tab-id"></strong></article>
+        <article><span>Epoch</span><strong id="epoch">0</strong></article>
+        <article>
+          <span>Runtime contract</span
+          ><strong id="compatibility">unknown</strong>
+        </article>
+      </section>
+      <section class="control-panel">
+        <label for="prompt">Synthetic request</label>
+        <textarea id="prompt">Shared worker runtime</textarea>
+        <div class="button-row">
+          <button id="send" type="button" disabled>Run request</button>
+          <button id="cancel" type="button" disabled>Cancel</button>
+          <button id="open-peer" type="button">Open sibling tab</button>
+        </div>
+        <p id="request-status">waiting</p>
+        <output id="output" aria-live="polite"></output>
+        <p id="error" role="alert"></p>
+      </section>
+    </main>
+    <script type="module" src="./shared-worker.ts"></script>
+  </body>
+</html>

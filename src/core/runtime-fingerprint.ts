@@ -32,7 +32,7 @@ export async function createRuntimeFingerprint(
   components: RuntimeFingerprintComponents,
 ): Promise<RuntimeFingerprint> {
   const entries = Object.entries(components).sort(([left], [right]) =>
-    left.localeCompare(right),
+    left < right ? -1 : left > right ? 1 : 0,
   );
   if (entries.length === 0 || entries.length > 32) {
     throw new TabLoomError(

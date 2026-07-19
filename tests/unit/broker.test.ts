@@ -59,14 +59,15 @@ describe('in-memory broker cluster', () => {
     let controller: AbortController | undefined;
     let leadershipTask: Promise<void> | undefined;
     const election: ElectionPort = {
-      start: async (listener) => {
+      start: (listener) => {
         attempts += 1;
         if (attempts === 1) {
-          throw new Error('private capability detail');
+          return Promise.reject(new Error('private capability detail'));
         }
         controller = new AbortController();
         leadershipTask = listener({ epoch: 1, signal: controller.signal });
         void leadershipTask.catch(() => undefined);
+        return Promise.resolve();
       },
       stop: async () => {
         controller?.abort();
@@ -357,6 +358,87 @@ describe('in-memory broker cluster', () => {
       code: 'ADAPTER_FAILED',
       message: 'The inference adapter failed.',
     });
+  });
+
+  it('fails the broker when adapter initialization cannot complete', async () => {
+    const telemetry = new CollectingTelemetry();
+    const cluster = await createCluster(1, {
+      adapterFactory: () => ({
+        descriptor: {
+          evidence: 'provider-runtime',
+          id: 'initialization-failure',
+          name: 'Initialization failure adapter',
+          version: '1',
+        },
+        initialize: () => Promise.reject(new Error('private init detail')),
+        run: () => Promise.reject(new Error('must not run')),
+      }),
+      telemetryFactory: () => telemetry,
+    });
+    const broker = cluster[0]!;
+
+    await waitFor(() => broker.snapshot.role === 'stopped');
+    expect(telemetry.events).toContainEqual(
+      expect.objectContaining({ kind: 'adapter_failed' }),
+    );
+    expect(telemetry.events).toContainEqual(
+      expect.objectContaining({ kind: 'broker_failed' }),
+    );
+  });
+
+  it('terminalizes an inserted session when transport send fails', async () => {
+    const transport = new InMemoryTransportHub();
+    const port = transport.createPort('transport-failure');
+    const broker = new TabLoomBroker<
+      DeterministicRequest,
+      DeterministicChunk,
+      DeterministicResult
+    >(
+      {
+        heartbeatIntervalMs: 50,
+        leaderTimeoutMs: 150,
+        namespace: 'transport-failure',
+        requestTimeoutMs: 1_000,
+        runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
+      },
+      {
+        adapter: new DeterministicInferenceAdapter(),
+        clock: new SystemClock(),
+        election: {
+          start: () => Promise.resolve(),
+          stop: () => Promise.resolve(),
+        },
+        ids: new SequenceIdProvider('transport-failure'),
+        telemetry: new CollectingTelemetry(),
+        transport: port,
+      },
+    );
+    brokers.push(broker);
+    await broker.start();
+    port.deliver({
+      adapter: broker.snapshot.adapter,
+      capacity: 8,
+      epoch: 1,
+      kind: 'leader',
+      messageId: 'leader-message',
+      protocolVersion: broker.config.protocolVersion,
+      queueDepth: 0,
+      readiness: 'ready',
+      runtimeFingerprint: TEST_RUNTIME_FINGERPRINT,
+      sentAt: Date.now(),
+      sourceId: 'remote-owner',
+    });
+    await waitFor(() => broker.snapshot.role === 'peer');
+    port.send = () => {
+      throw new Error('port failed');
+    };
+
+    const session = broker.request({ text: 'must fail atomically' });
+    await expect(session.result).rejects.toMatchObject({
+      code: 'TRANSPORT_FAILED',
+    });
+    await waitFor(() => broker.snapshot.role === 'stopped');
+    expect(broker.snapshot.terminalCount).toBe(1);
   });
 
   it('times out without an owner and records invalid traffic', async () => {

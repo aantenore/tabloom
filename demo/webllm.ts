@@ -1,6 +1,11 @@
+import WebLlmSharedWorkerHost from './webllm-shared-worker-host?sharedworker';
 import { WebLlmInferenceAdapter } from '../src/adapters/webllm.js';
 import { createBrowserBroker } from '../src/browser.js';
-import { createRuntimeFingerprint } from '../src/core/runtime-fingerprint.js';
+import { createAdaptiveBrowserBroker } from '../src/shared-worker.js';
+import {
+  createWebLlmRuntimeFingerprint,
+  createWebLlmSharedWorkerName,
+} from './webllm-shared-worker-config.js';
 
 const DEFAULT_MODEL_ID = 'SmolLM2-360M-Instruct-q4f16_1-MLC';
 
@@ -22,6 +27,7 @@ const elements = {
   send: requiredButton('send'),
   tabId: requiredElement('tab-id'),
   terminalCount: requiredElement('terminal-count'),
+  topology: requiredElement('topology'),
   usageTokens: requiredElement('usage-tokens'),
   webgpu: requiredElement('webgpu'),
 };
@@ -34,6 +40,8 @@ async function runLiveLab(): Promise<void> {
     search.get('namespace') ?? `tabloom-webllm-${crypto.randomUUID()}`,
   );
   const modelId = sanitizeModelId(search.get('model') ?? DEFAULT_MODEL_ID);
+  const topology =
+    search.get('topology') === 'shared-worker' ? 'shared-worker' : 'page-owner';
   const gpuAvailable = Reflect.has(navigator, 'gpu');
 
   elements.modelId.textContent = modelId;
@@ -61,24 +69,35 @@ async function runLiveLab(): Promise<void> {
         elements.progress.textContent = progressMessage(progress);
       },
     });
-    const runtimeFingerprint = await createRuntimeFingerprint({
-      adapter: 'webllm@0.2.84',
-      build: 'tabloom-webllm-live-lab-v1',
-      configuration: 'default',
-      model: modelId,
-    });
-    const broker = createBrowserBroker({
-      adapter,
-      config: {
-        heartbeatIntervalMs: 500,
-        leaderTimeoutMs: 3_000,
-        maxConcurrent: 1,
-        namespace,
-        queueCapacity: 2,
-        requestTimeoutMs: 180_000,
-        runtimeFingerprint,
-      },
-    });
+    const runtimeFingerprint = await createWebLlmRuntimeFingerprint(modelId);
+    const config = {
+      heartbeatIntervalMs: 500,
+      leaderTimeoutMs: 3_000,
+      maxConcurrent: 1,
+      namespace,
+      queueCapacity: 2,
+      requestTimeoutMs: 180_000,
+      runtimeFingerprint,
+    } as const;
+    const selection =
+      topology === 'shared-worker'
+        ? await createAdaptiveBrowserBroker({
+            adapter,
+            config,
+            topology: {
+              mode: 'shared-worker',
+              name: createWebLlmSharedWorkerName({ modelId, namespace }),
+              requiredCapabilities: ['webgpu'],
+              workerFactory: (options) =>
+                new WebLlmSharedWorkerHost({ name: options.name }),
+            },
+          })
+        : {
+            broker: createBrowserBroker({ adapter, config }),
+            topology: 'page-owner' as const,
+          };
+    const broker = selection.broker;
+    elements.topology.textContent = selection.topology;
     let active = false;
     let role = broker.snapshot.role;
     let readiness = broker.snapshot.readiness;

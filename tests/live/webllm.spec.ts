@@ -103,12 +103,94 @@ test.describe('TabLoom WebLLM live evidence', () => {
       contentType: 'application/json',
     });
   });
+
+  test('keeps a real WebLLM runtime alive in one SharedWorker', async ({
+    context,
+  }, testInfo) => {
+    const startedAt = Date.now();
+    const cluster = await openCluster(
+      context,
+      namespace(testInfo.title),
+      MODEL_ID,
+      'shared-worker',
+    );
+
+    await expect
+      .poll(() => roles(cluster), { timeout: 600_000 })
+      .toEqual(['peer', 'peer']);
+    await Promise.all(
+      cluster.map(async ({ page }) => {
+        await expect(page.getByTestId('topology')).toHaveText('shared-worker');
+        await expect(page.getByTestId('readiness')).toHaveText('ready', {
+          timeout: 600_000,
+        });
+        await expect(page.getByTestId('evidence')).toHaveText(
+          'provider-runtime',
+        );
+      }),
+    );
+
+    const ownerIds = await Promise.all(
+      cluster.map(async ({ page }) =>
+        page.getByTestId('owner-id').textContent(),
+      ),
+    );
+    expect(ownerIds[0]).not.toBe('');
+    expect(new Set(ownerIds).size).toBe(1);
+    const progressEventCounts = await Promise.all(
+      cluster.map(async ({ page }) => numberText(page, 'progress-event-count')),
+    );
+    expect(progressEventCounts).toEqual([0, 0]);
+
+    const firstPeer = cluster[0];
+    if (firstPeer === undefined) {
+      throw new Error('The SharedWorker cluster did not open.');
+    }
+    await runPrompt(firstPeer);
+    await firstPeer.page.close();
+
+    const survivingPeer = cluster[1];
+    if (survivingPeer === undefined) {
+      throw new Error('The surviving SharedWorker peer was not found.');
+    }
+    await expect(survivingPeer.page.getByTestId('readiness')).toHaveText(
+      'ready',
+    );
+    await runPrompt(survivingPeer);
+
+    expect(cluster.flatMap((item) => item.errors)).toEqual([]);
+    await testInfo.attach('shared-worker-runtime-evidence.json', {
+      body: Buffer.from(
+        JSON.stringify(
+          {
+            browserVersion: context.browser()?.version() ?? 'unknown',
+            durationMs: Date.now() - startedAt,
+            modelId: MODEL_ID,
+            ownerId: ownerIds[0],
+            progressEventCounts,
+            providerVersion: '0.2.84',
+            survivingPeerUsageTokens: await numberText(
+              survivingPeer.page,
+              'usage-tokens',
+            ),
+            topology: await survivingPeer.page
+              .getByTestId('topology')
+              .textContent(),
+          },
+          null,
+          2,
+        ),
+      ),
+      contentType: 'application/json',
+    });
+  });
 });
 
 async function openCluster(
   context: BrowserContext,
   brokerNamespace: string,
   modelId: string,
+  topology: 'page-owner' | 'shared-worker' = 'page-owner',
 ): Promise<ObservedPage[]> {
   const cluster: ObservedPage[] = [];
   for (let index = 0; index < 2; index += 1) {
@@ -123,12 +205,38 @@ async function openCluster(
     const search = new URLSearchParams({
       model: modelId,
       namespace: brokerNamespace,
+      topology,
     });
     await page.goto(`/webllm.html?${search.toString()}`);
     await expect(page).toHaveTitle('TabLoom WebLLM live lab');
     cluster.push({ errors, page });
   }
   return cluster;
+}
+
+async function runPrompt(peer: ObservedPage): Promise<void> {
+  await peer.page
+    .getByTestId('prompt')
+    .fill('Respond with one short word confirming readiness.');
+  await peer.page.getByTestId('send').click();
+  await expect(peer.page.getByTestId('request-status')).toHaveText(
+    'completed',
+    { timeout: 180_000 },
+  );
+  await expect
+    .poll(
+      async () =>
+        (await peer.page.getByTestId('output').textContent())?.trim().length ??
+        0,
+      { timeout: 180_000 },
+    )
+    .toBeGreaterThan(0);
+  await expect
+    .poll(() => numberText(peer.page, 'usage-tokens'))
+    .toBeGreaterThan(0);
+  expect(await peer.page.getByTestId('output').textContent()).toBe(
+    await peer.page.getByTestId('result-text').textContent(),
+  );
 }
 
 async function numberText(page: Page, testId: string): Promise<number> {

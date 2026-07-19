@@ -271,6 +271,8 @@ function statusForError(code: TabLoomError['code']): string {
     case 'INVALID_CONFIG':
     case 'NO_LEADER':
     case 'START_FAILED':
+    case 'TOPOLOGY_UNAVAILABLE':
+    case 'TRANSPORT_FAILED':
       return 'failed';
   }
 }

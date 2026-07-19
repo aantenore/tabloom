@@ -209,6 +209,10 @@
           <dd id="evidence" data-testid="evidence">provider-runtime</dd>
         </dl>
         <dl class="metric">
+          <dt>Topology</dt>
+          <dd id="topology" data-testid="topology">starting</dd>
+        </dl>
+        <dl class="metric">
           <dt>WebGPU</dt>
           <dd id="webgpu" data-testid="webgpu">checking</dd>
         </dl>
@@ -226,8 +230,9 @@
         <h2 id="progress-heading">Owner initialization</h2>
         <p id="progress" data-testid="progress">Waiting to start.</p>
         <p class="hint">
-          Model initialization runs only in the elected owner tab. A peer
-          observes broker readiness without loading its own runtime.
+          Model initialization runs only in the elected owner tab or
+          SharedWorker. Peers observe broker readiness without loading their own
+          runtime.
         </p>
       </section>
 
