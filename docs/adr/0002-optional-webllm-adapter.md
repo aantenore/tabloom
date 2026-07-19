@@ -7,7 +7,7 @@
 
 The first TabLoom alpha proved fenced multi-page coordination with a deterministic adapter. Leaving every real runtime as application glue made the central composition claim harder to verify. Bundling a browser model runtime into the core would instead couple protocol evolution to a large, fast-moving provider and impose WebGPU code on consumers that do not use it.
 
-WebLLM already owns model loading, artifact caching, WebGPU execution, OpenAI-shaped streaming, and worker topologies. Its Service Worker option can preserve a runtime across page visits, but it has a different ownership model from TabLoom's elected live page.
+WebLLM already owns model loading, artifact caching, WebGPU execution, OpenAI-shaped streaming, and worker topologies. Its Service Worker option can preserve a runtime across page visits, but it has a different ownership and recovery model from TabLoom's fenced page owner and adaptive SharedWorker host.
 
 ## Decision
 
@@ -26,4 +26,4 @@ Ship `WebLlmInferenceAdapter` only through `@aantenore/tabloom/adapters/webllm`.
 
 Core users do not download or execute WebLLM. Provider users get a maintained composition point and an opt-in real-model test, but compatibility is deliberately narrow: exact provider version, selected model, installed Chrome, WebGPU-capable device, and same-origin secure context.
 
-WebLLM's Service Worker engine is not nested inside TabLoom. Applications choose either that worker lifecycle or TabLoom's provider-neutral page election according to their operational needs.
+WebLLM's Service Worker engine is not nested inside TabLoom. Applications choose that provider-owned lifecycle or TabLoom's provider-neutral page-owner or SharedWorker host according to their operational needs. The optional adapter can run inside either TabLoom owner topology; the host still controls the model and requires a matching runtime fingerprint.
