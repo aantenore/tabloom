@@ -7,6 +7,11 @@
     "node": ">=24"
   },
   "packageManager": "pnpm@11.13.0",
+  "tabloomRelease": {
+    "version": "0.3.0-alpha.2",
+    "integrity": "sha512-E9LQMl+dovCjAksjA6jrmfFemviu6uT45IwjUK2dcsvnINiUPPiZUzXHd8pwbTHQhPeIft0SrnFcdTFNdxL3hg==",
+    "webLlmVersion": "0.2.84"
+  },
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite",

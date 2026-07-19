@@ -5,7 +5,10 @@ import { resolveRuntimeConfig } from './runtime-config';
 const runtime = await resolveRuntimeConfig();
 
 createSharedWorkerBrokerHost({
-  adapter: new WebLlmInferenceAdapter({ modelId: runtime.modelId }),
+  adapter: new WebLlmInferenceAdapter({
+    engineConfig: runtime.engineConfig,
+    modelId: runtime.modelId,
+  }),
   config: runtime.broker,
   ...runtime.host,
   scope: globalThis,

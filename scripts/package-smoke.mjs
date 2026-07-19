@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -11,8 +12,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, join, relative, sep } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'tabloom-package-'));
@@ -269,24 +270,122 @@ try {
     'The optional provider import must remain lazy.',
   );
 
-  cpSync(join(repositoryRoot, 'examples', 'vite-webllm'), starterRoot, {
+  const starterSource = join(repositoryRoot, 'examples', 'vite-webllm');
+  cpSync(starterSource, starterRoot, {
+    filter: (source) => {
+      const segments = relative(starterSource, source).split(sep);
+      return !segments.some((segment) =>
+        ['dist', 'node_modules'].includes(segment),
+      );
+    },
     recursive: true,
   });
+  assert.equal(
+    existsSync(join(starterRoot, 'node_modules')),
+    false,
+    'The starter smoke must begin without copied dependencies.',
+  );
   assertPublicPackageImports(starterRoot);
   const starterPackagePath = join(starterRoot, 'package.json');
   const starterPackage = parsePackageManifest(
     readFileSync(starterPackagePath, 'utf8'),
   );
-  starterPackage.dependencies['@aantenore/tabloom'] =
-    `file:${join(temporaryRoot, archive)}`;
+  const repositoryPackage = parsePackageManifest(
+    readFileSync(join(repositoryRoot, 'package.json'), 'utf8'),
+  );
+  const releaseBoundary = starterPackage['tabloomRelease'];
+  assert.ok(
+    isRecord(releaseBoundary) &&
+      typeof releaseBoundary['version'] === 'string' &&
+      typeof releaseBoundary['integrity'] === 'string' &&
+      typeof releaseBoundary['webLlmVersion'] === 'string',
+    'The starter must declare its verified published TabLoom boundary.',
+  );
+  assert.match(
+    releaseBoundary['version'],
+    /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u,
+  );
+  assert.match(releaseBoundary['integrity'], /^sha512-[A-Za-z0-9+/]+={0,2}$/u);
+  assertPinnedRuntimeArtifacts(
+    starterRoot,
+    releaseBoundary['webLlmVersion'],
+    releaseBoundary['version'],
+    releaseBoundary['integrity'],
+  );
+  const expectedArchive =
+    `https://github.com/aantenore/tabloom/releases/download/` +
+    `v${releaseBoundary['version']}/tabloom-${releaseBoundary['version']}.tgz`;
+  assert.equal(
+    starterPackage.dependencies['@aantenore/tabloom'],
+    expectedArchive,
+    'The starter archive URL must match its verified published boundary.',
+  );
+  const starterLock = readFileSync(join(starterRoot, 'pnpm-lock.yaml'), 'utf8');
+  assert.ok(
+    starterLock.includes(expectedArchive) &&
+      starterLock.includes(`integrity: ${releaseBoundary['integrity']}`),
+    'The starter lock must bind the declared release URL and archive integrity.',
+  );
+  assert.equal(
+    starterPackage.dependencies['@mlc-ai/web-llm'],
+    releaseBoundary['webLlmVersion'],
+    'The starter WebLLM version must match its published TabLoom boundary.',
+  );
+  assert.ok(
+    starterLock.includes(
+      `'@mlc-ai/web-llm': ${releaseBoundary['webLlmVersion']}`,
+    ),
+    'The starter lock must retain the published TabLoom WebLLM peer boundary.',
+  );
+  execFileSync(
+    process.execPath,
+    [pnpmCli, 'install', '--frozen-lockfile', '--ignore-scripts', '--silent'],
+    { cwd: starterRoot, stdio: 'pipe' },
+  );
+  const remoteInstalledPackage = parsePackageManifest(
+    readFileSync(
+      join(
+        starterRoot,
+        'node_modules',
+        '@aantenore',
+        'tabloom',
+        'package.json',
+      ),
+      'utf8',
+    ),
+  );
+  assert.equal(
+    remoteInstalledPackage.version,
+    releaseBoundary['version'],
+    'The frozen starter install must resolve the declared published boundary.',
+  );
+  execFileSync(
+    process.execPath,
+    [pnpmCli, 'audit', '--prod', '--audit-level=high'],
+    { cwd: starterRoot, stdio: 'pipe' },
+  );
+  const localArchiveUrl = pathToFileURL(join(temporaryRoot, archive)).href;
+  starterPackage.dependencies['@aantenore/tabloom'] = localArchiveUrl;
   writeFileSync(
     starterPackagePath,
     `${JSON.stringify(starterPackage, null, 2)}\n`,
   );
   execFileSync(
     process.execPath,
-    [pnpmCli, 'install', '--ignore-scripts', '--silent'],
+    [
+      pnpmCli,
+      'install',
+      '--no-frozen-lockfile',
+      '--ignore-scripts',
+      '--silent',
+    ],
     { cwd: starterRoot, stdio: 'pipe' },
+  );
+  assert.ok(
+    readFileSync(join(starterRoot, 'pnpm-lock.yaml'), 'utf8').includes(
+      localArchiveUrl,
+    ),
+    'The current-source build must resolve TabLoom from the freshly packed local archive.',
   );
   execFileSync(process.execPath, [pnpmCli, 'build'], {
     cwd: starterRoot,
@@ -308,9 +407,6 @@ try {
       ),
       'utf8',
     ),
-  );
-  const repositoryPackage = parsePackageManifest(
-    readFileSync(join(repositoryRoot, 'package.json'), 'utf8'),
   );
   assert.equal(installedPackage.version, repositoryPackage.version);
 
@@ -346,6 +442,74 @@ function assertPublicPackageImports(starter) {
       source,
       /@aantenore\/tabloom\/(?:dist|src)|(?:\.\.\/)+src\//u,
       `${entry} imports an internal TabLoom module.`,
+    );
+  }
+}
+
+/**
+ * @param {string} starter
+ * @param {string} webLlmVersion
+ * @param {string} tabloomVersion
+ * @param {string} tabloomIntegrity
+ * @returns {void}
+ */
+function assertPinnedRuntimeArtifacts(
+  starter,
+  webLlmVersion,
+  tabloomVersion,
+  tabloomIntegrity,
+) {
+  const source = readFileSync(
+    join(starter, 'src', 'runtime-config.ts'),
+    'utf8',
+  );
+  assert.doesNotMatch(
+    source,
+    /(?:raw\.githubusercontent\.com|huggingface\.co)[^'\n]*\/main(?:\/|')/u,
+    'The verified starter must not resolve model artifacts from a mutable main branch.',
+  );
+  assert.match(
+    source,
+    /huggingface\.co\/[^'\n]+\/resolve\/[0-9a-f]{40}\//u,
+    'The model weights must resolve from an immutable Hugging Face revision.',
+  );
+  assert.match(
+    source,
+    /raw\.githubusercontent\.com\/[^'\n]+\/[0-9a-f]{40}\//u,
+    'The model library must resolve from an immutable Git commit.',
+  );
+  assert.equal(
+    (source.match(/'sha384-[A-Za-z0-9+/=]+'/gu) ?? []).length,
+    3,
+    'The model config, tokenizer, and model library require explicit SRI.',
+  );
+  assert.match(
+    source,
+    /integrityMode: 'error'/u,
+    'Runtime artifact integrity must fail closed.',
+  );
+  assert.match(source, /onFailure: artifactPolicy\.integrityMode/u);
+  assert.match(source, /cacheBackend: artifactPolicy\.cacheBackend/u);
+  assert.match(
+    source,
+    /createRuntimeFingerprint\(\{\s*\.\.\.runtimeManifest,/u,
+    'The runtime fingerprint must bind the immutable artifact manifest.',
+  );
+  assert.ok(
+    source.includes(`adapter: 'webllm@${webLlmVersion}'`),
+    'The fingerprinted adapter identity must match the published WebLLM boundary.',
+  );
+  assert.ok(
+    source.includes(`controlPlane: 'tabloom@${tabloomVersion}'`) &&
+      source.includes(`controlPlaneIntegrity:\n    '${tabloomIntegrity}'`),
+    'The runtime fingerprint must bind the verified TabLoom release boundary.',
+  );
+
+  for (const entry of ['main.ts', 'tabloom.worker.ts']) {
+    assert.match(
+      readFileSync(join(starter, 'src', entry), 'utf8'),
+      /engineConfig: runtime\.engineConfig/u,
+      `${entry} must use the integrity-pinned WebLLM AppConfig.`,
     );
   }
 }
