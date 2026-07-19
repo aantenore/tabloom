@@ -106,17 +106,41 @@ test.describe('TabLoom adaptive SharedWorker topology', () => {
     context,
   }) => {
     const pages = await openCluster(context, 5, '?mode=shared-worker');
+    const holder = pages[0]!;
+    const contenders = pages.slice(1);
+    const work = 'bounded-work-'.repeat(512);
     await Promise.all(
       pages.map((page) =>
         expect(page.locator('#readiness')).toHaveText('ready'),
       ),
     );
+    await holder.locator('#prompt').fill(`holder-${work}`);
     await Promise.all(
-      pages.map((page, index) =>
-        page.locator('#prompt').fill(`${index}-${'bounded-work-'.repeat(24)}`),
+      contenders.map((page, index) =>
+        page.locator('#prompt').fill(`contender-${index}-${work}`),
       ),
     );
-    await Promise.all(pages.map((page) => page.locator('#send').click()));
+    await holder.locator('#send').click();
+    await expect(holder.locator('#output')).not.toHaveText('');
+    await Promise.all(
+      contenders.map((page) => page.locator('#send').dispatchEvent('click')),
+    );
+    await expect
+      .poll(async () => {
+        const errors = await Promise.all(
+          pages.map((page) => page.locator('#error').textContent()),
+        );
+        return errors.filter((error) => error === 'BACKPRESSURE').length;
+      })
+      .toBe(1);
+    await Promise.all(
+      pages.map(async (page) => {
+        const cancel = page.locator('#cancel');
+        if (await cancel.isEnabled()) {
+          await cancel.dispatchEvent('click');
+        }
+      }),
+    );
     await Promise.all(
       pages.map((page) =>
         expect(page.locator('#request-status')).toHaveText(/completed|failed/u),
@@ -126,6 +150,7 @@ test.describe('TabLoom adaptive SharedWorker topology', () => {
       pages.map((page) => page.locator('#error').textContent()),
     );
     expect(errors.filter((error) => error === 'BACKPRESSURE')).toHaveLength(1);
+    expect(errors.filter((error) => error === 'CANCELLED')).toHaveLength(4);
   });
 });
 
