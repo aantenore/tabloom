@@ -47,6 +47,77 @@ describe('in-memory broker cluster', () => {
     ).toThrowError(TabLoomError);
     await broker.stop();
     await broker.stop();
+    await expect(broker.start()).rejects.toMatchObject({
+      code: 'BROKER_STOPPED',
+    });
+  });
+
+  it('rolls back failed startup and permits an explicit retry', async () => {
+    const transport = new InMemoryTransportHub();
+    let attempts = 0;
+    let controller: AbortController | undefined;
+    let leadershipTask: Promise<void> | undefined;
+    const election: ElectionPort = {
+      start: async (listener) => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error('private capability detail');
+        }
+        controller = new AbortController();
+        leadershipTask = listener({ epoch: 1, signal: controller.signal });
+        void leadershipTask.catch(() => undefined);
+      },
+      stop: async () => {
+        controller?.abort();
+        await leadershipTask;
+        controller = undefined;
+        leadershipTask = undefined;
+      },
+    };
+    const broker = new TabLoomBroker<
+      DeterministicRequest,
+      DeterministicChunk,
+      DeterministicResult
+    >(
+      {
+        heartbeatIntervalMs: 50,
+        leaderTimeoutMs: 150,
+        namespace: 'startup-rollback',
+        requestTimeoutMs: 1_000,
+      },
+      {
+        adapter: new DeterministicInferenceAdapter({ defaultChunkDelayMs: 0 }),
+        clock: new SystemClock(),
+        election,
+        ids: new SequenceIdProvider('startup-rollback'),
+        telemetry: new CollectingTelemetry(),
+        transport: transport.createPort('startup-rollback'),
+      },
+    );
+    brokers.push(broker);
+
+    const failedStart = broker.start();
+    expect(broker.start()).toBe(failedStart);
+    await expect(failedStart).rejects.toMatchObject({
+      code: 'CAPABILITY_UNAVAILABLE',
+      message:
+        'The broker could not start with the configured browser capabilities.',
+    });
+    expect(attempts).toBe(1);
+    expect(broker.snapshot).toMatchObject({
+      readiness: 'stopped',
+      role: 'stopped',
+    });
+    expect(() => broker.request({ text: 'must fail closed' })).toThrowError(
+      expect.objectContaining({ code: 'BROKER_STOPPED' }),
+    );
+
+    await broker.start();
+    await waitFor(() => broker.snapshot.readiness === 'ready');
+    const session = broker.request({ chunkDelayMs: 0, text: 'retry' });
+    await expect(session.result).resolves.toMatchObject({
+      text: 'Woven once: retry',
+    });
   });
 
   it('elects one owner and streams peer work', async () => {

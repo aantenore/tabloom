@@ -57,7 +57,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
   readonly tabId: string;
   #activeOwnerWork = new Map<string, OwnerWork>();
   #dependencies: BrokerDependencies<TRequest, TChunk, TResult>;
-  #electionTask?: Promise<void>;
+  #electionTask: Promise<void> | undefined;
   #heartbeatHandle?: unknown;
   #knownPeers = new Map<string, number>();
   #leader: LeaderEnvelope | undefined;
@@ -67,6 +67,8 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
   #pendingClients = new Map<string, PendingClient<TRequest, TChunk, TResult>>();
   #presenceHandle?: unknown;
   #started = false;
+  #startTask: Promise<void> | undefined;
+  #terminated = false;
   #terminalCount = 0;
   #unsubscribeTransport: (() => void) | undefined;
 
@@ -114,28 +116,63 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     };
   }
 
-  async start(): Promise<void> {
-    if (this.#started) {
-      return;
+  start(): Promise<void> {
+    if (this.#terminated) {
+      return Promise.reject(
+        new TabLoomError(
+          'BROKER_STOPPED',
+          'A stopped broker cannot be started again. Create a new broker.',
+        ),
+      );
     }
+    if (this.#startTask !== undefined) {
+      return this.#startTask;
+    }
+    if (this.#started) {
+      return Promise.resolve();
+    }
+
+    const startTask = this.#start();
+    this.#startTask = startTask;
+    const clearStartTask = () => {
+      if (this.#startTask === startTask) {
+        this.#startTask = undefined;
+      }
+    };
+    void startTask.then(clearStartTask, clearStartTask);
+    return startTask;
+  }
+
+  async #start(): Promise<void> {
     this.#started = true;
     this.#machine = transitionBrokerState(this.#machine, { type: 'start' });
-    this.#unsubscribeTransport = this.#dependencies.transport.subscribe(
-      (input) => {
-        this.#handleRawEnvelope(input);
-      },
-    );
-    this.#sendPresence();
-    this.#presenceHandle = this.#dependencies.clock.setInterval(
-      () => this.#sendPresence(),
-      this.config.heartbeatIntervalMs,
-    );
-    await this.#dependencies.election.start(async (lease) =>
-      this.#holdLeadership(lease),
-    );
-    this.#electionTask = Promise.resolve();
-    this.#record({ kind: 'broker_started' });
-    this.#notify();
+    try {
+      this.#unsubscribeTransport = this.#dependencies.transport.subscribe(
+        (input) => {
+          this.#handleRawEnvelope(input);
+        },
+      );
+      this.#sendPresence();
+      this.#presenceHandle = this.#dependencies.clock.setInterval(
+        () => this.#sendPresence(),
+        this.config.heartbeatIntervalMs,
+      );
+      const electionTask = this.#dependencies.election.start(async (lease) =>
+        this.#holdLeadership(lease),
+      );
+      this.#electionTask = electionTask;
+      await electionTask;
+      this.#record({ kind: 'broker_started' });
+      this.#notify();
+    } catch (error) {
+      await this.#rollbackStart();
+      throw new TabLoomError(
+        'CAPABILITY_UNAVAILABLE',
+        'The broker could not start with the configured browser capabilities.',
+        {},
+        error instanceof Error ? { cause: error } : undefined,
+      );
+    }
   }
 
   request(
@@ -205,10 +242,19 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
   }
 
   async stop(): Promise<void> {
+    const startTask = this.#startTask;
+    if (startTask !== undefined) {
+      try {
+        await startTask;
+      } catch {
+        return;
+      }
+    }
     if (!this.#started) {
       return;
     }
     this.#started = false;
+    this.#terminated = true;
     this.#machine = transitionBrokerState(this.#machine, { type: 'stop' });
     if (this.#presenceHandle !== undefined) {
       this.#dependencies.clock.clearInterval(this.#presenceHandle);
@@ -231,10 +277,39 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
       this.#deletePendingClient(requestId);
     }
     this.#abortOwnerWorkForLeaseLoss();
-    await this.#dependencies.election.stop();
-    await this.#electionTask;
-    this.#dependencies.transport.close();
-    this.#record({ kind: 'broker_stopped' });
+    try {
+      await this.#dependencies.election.stop();
+      await this.#electionTask;
+    } finally {
+      this.#electionTask = undefined;
+      this.#dependencies.transport.close();
+      this.#record({ kind: 'broker_stopped' });
+      this.#notify();
+    }
+  }
+
+  async #rollbackStart(): Promise<void> {
+    this.#started = false;
+    if (this.#presenceHandle !== undefined) {
+      this.#dependencies.clock.clearInterval(this.#presenceHandle);
+      this.#presenceHandle = undefined;
+    }
+    if (this.#heartbeatHandle !== undefined) {
+      this.#dependencies.clock.clearInterval(this.#heartbeatHandle);
+      this.#heartbeatHandle = undefined;
+    }
+    this.#unsubscribeTransport?.();
+    this.#unsubscribeTransport = undefined;
+    this.#abortOwnerWorkForLeaseLoss();
+    try {
+      await this.#dependencies.election.stop();
+    } catch {
+      // Preserve the startup failure while still returning to a retryable state.
+    }
+    this.#electionTask = undefined;
+    this.#leader = undefined;
+    this.#knownPeers.clear();
+    this.#machine = transitionBrokerState(this.#machine, { type: 'stop' });
     this.#notify();
   }
 
