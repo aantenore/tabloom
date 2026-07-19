@@ -83,6 +83,7 @@
     "test:browser:chromium": "playwright test --project=chromium",
     "test:browser:preview": "playwright test --config=playwright.preview.config.ts",
     "test:live:webllm": "playwright test --config=playwright.webllm.config.ts",
+    "test:live:starter": "playwright test --config=playwright.starter-webllm.config.ts",
     "test:unit": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.demo.json --noEmit"
   },
