@@ -91,9 +91,12 @@ test.describe('TabLoom adaptive SharedWorker topology', () => {
     await page.goto('/shared-worker.html?mode=shared-worker');
     await expect(page.locator('#topology')).toHaveText('shared-worker');
     await expect(page.locator('#readiness')).toHaveText('ready');
-    await page.locator('#prompt').fill('cancel this stream after it starts');
+    await page
+      .locator('#prompt')
+      .fill('cancel this stream after it starts '.repeat(40));
     await page.locator('#send').click();
     await expect(page.locator('#cancel')).toBeEnabled();
+    await expect(page.locator('#output')).not.toHaveText('');
     await page.locator('#cancel').click();
     await expect(page.locator('#request-status')).toHaveText('failed');
     await expect(page.locator('#error')).toHaveText('CANCELLED');
