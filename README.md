@@ -4,13 +4,47 @@
 [![Browser conformance](https://github.com/aantenore/tabloom/actions/workflows/browser.yml/badge.svg)](https://github.com/aantenore/tabloom/actions/workflows/browser.yml)
 [![CodeQL](https://github.com/aantenore/tabloom/actions/workflows/codeql.yml/badge.svg)](https://github.com/aantenore/tabloom/actions/workflows/codeql.yml)
 
+**Let multiple browser tabs share one local AI runtime safely.**
+
+## In plain English
+
+- **Problem:** if every tab in one web application starts its own local model,
+  the tabs can duplicate expensive initialization, compete for device memory,
+  and disagree about which runtime owns an in-flight request.
+- **What it does:** TabLoom elects one active runtime owner for the same-origin
+  application and lets sibling pages use it through bounded, streaming sessions.
+  If a SharedWorker is not a safe lifecycle choice, it can select a page owner
+  instead.
+- **Who it is for:** web developers adding private, on-device inference to
+  multi-page or multi-tab browser applications.
+- **Concrete example:** open two tabs of the included Vite/WebLLM starter. Both
+  tabs use one compatible owner and model configuration rather than initializing
+  independent engines. If ownership changes, a newer ownership number ensures
+  that a late result from the old owner is ignored.
+
+| Feature                                                     | Real-world benefit                                                                                              |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| One owner with an always-increasing ownership number        | Applications can avoid unnecessary duplicate model runtimes and ignore results from an old owner.               |
+| Adaptive SharedWorker or page-owner topology                | The application can keep one coordination contract while choosing the safer lifecycle for the browser.          |
+| Runtime fingerprint negotiation                             | Tabs with incompatible model or application configurations are rejected before inference starts.                |
+| Bounded queue, cancellation, timeouts, and takeover         | A slow, closed, or replaced tab does not leave unlimited work waiting without lifecycle controls.               |
+| Streaming sessions with epoch-aware retry events            | The UI can clear partial output and restart cleanly after ownership changes.                                    |
+| Provider-neutral adapter boundary and prompt-free telemetry | Teams can change inference runtimes and diagnose coordination without placing prompt text in TabLoom telemetry. |
+
+> **Maturity and limits:** TabLoom is an alpha coordination library, not a model
+> runtime. The WebLLM path has been verified with an actual model on
+> Chrome/WebGPU, but that is not a compatibility claim for every browser, GPU,
+> model, or future provider version. Coordination is limited to pages within the
+> same browser security boundary (the same origin); Transformers.js remains an
+> unverified integration seam.
+
+## Technical overview
+
 TabLoom is a provider-neutral, same-origin browser inference control plane. It coordinates sibling pages through an adaptive topology: a SharedWorker host when the runtime and lifecycle are suitable, or a fenced page owner when they are not.
 
 It supplies the coordination layer, not a model runtime: exclusive ownership, monotonic fencing epochs, runtime identity negotiation, bounded admission, streaming sessions, cancellation, timeouts, takeover, and privacy-safe telemetry.
 
 The core stays provider-neutral. A deterministic adapter exercises lifecycle behavior in every CI job, while a dedicated optional adapter composes [WebLLM 0.2.84](https://github.com/mlc-ai/web-llm) without bundling it into the core package.
-
-> **Alpha:** the WebLLM path is verified separately on Chrome/WebGPU with an actual model. It is not a compatibility claim for every browser, GPU, model, or future WebLLM version. Transformers.js remains an unverified integration seam.
 
 ## Why
 
