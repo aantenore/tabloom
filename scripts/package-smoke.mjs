@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -16,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'tabloom-package-'));
 const consumerRoot = join(temporaryRoot, 'consumer');
+const starterRoot = join(temporaryRoot, 'vite-webllm-starter');
 const pnpmCli = process.env.npm_execpath;
 assert.ok(pnpmCli, 'Run this smoke through the package manager script.');
 
@@ -266,7 +268,53 @@ try {
     ),
     'The optional provider import must remain lazy.',
   );
-  console.log(`Package smoke passed: ${archive}`);
+
+  cpSync(join(repositoryRoot, 'examples', 'vite-webllm'), starterRoot, {
+    recursive: true,
+  });
+  assertPublicPackageImports(starterRoot);
+  const starterPackagePath = join(starterRoot, 'package.json');
+  const starterPackage = parsePackageManifest(
+    readFileSync(starterPackagePath, 'utf8'),
+  );
+  starterPackage.dependencies['@aantenore/tabloom'] =
+    `file:${join(temporaryRoot, archive)}`;
+  writeFileSync(
+    starterPackagePath,
+    `${JSON.stringify(starterPackage, null, 2)}\n`,
+  );
+  execFileSync(
+    process.execPath,
+    [pnpmCli, 'install', '--ignore-scripts', '--silent'],
+    { cwd: starterRoot, stdio: 'pipe' },
+  );
+  execFileSync(process.execPath, [pnpmCli, 'build'], {
+    cwd: starterRoot,
+    stdio: 'pipe',
+  });
+  const starterAssets = listFiles(join(starterRoot, 'dist'));
+  assert.ok(
+    starterAssets.some((entry) => /tabloom\.worker-[^/]+\.js$/u.test(entry)),
+    'The packed-artifact starter build did not emit its SharedWorker chunk.',
+  );
+  const installedPackage = parsePackageManifest(
+    readFileSync(
+      join(
+        starterRoot,
+        'node_modules',
+        '@aantenore',
+        'tabloom',
+        'package.json',
+      ),
+      'utf8',
+    ),
+  );
+  const repositoryPackage = parsePackageManifest(
+    readFileSync(join(repositoryRoot, 'package.json'), 'utf8'),
+  );
+  assert.equal(installedPackage.version, repositoryPackage.version);
+
+  console.log(`Package and verified starter smoke passed: ${archive}`);
 } finally {
   rmSync(temporaryRoot, { force: true, recursive: true });
 }
@@ -282,4 +330,64 @@ function listFiles(root) {
       ? listFiles(path).map((child) => `${entry}/${child}`)
       : [entry];
   });
+}
+
+/**
+ * @param {string} starter
+ * @returns {void}
+ */
+function assertPublicPackageImports(starter) {
+  for (const entry of listFiles(join(starter, 'src'))) {
+    if (!entry.endsWith('.ts')) {
+      continue;
+    }
+    const source = readFileSync(join(starter, 'src', entry), 'utf8');
+    assert.doesNotMatch(
+      source,
+      /@aantenore\/tabloom\/(?:dist|src)|(?:\.\.\/)+src\//u,
+      `${entry} imports an internal TabLoom module.`,
+    );
+  }
+}
+
+/**
+ * @typedef {{ dependencies: Record<string, string>, version: string, [key: string]: unknown }} PackageManifest
+ */
+
+/**
+ * @param {string} source
+ * @returns {PackageManifest}
+ */
+function parsePackageManifest(source) {
+  const parsed = /** @type {unknown} */ (JSON.parse(source));
+  assert.ok(isRecord(parsed), 'The package manifest must be an object.');
+  assert.ok(
+    isStringRecord(parsed['dependencies']),
+    'The package manifest must have string dependencies.',
+  );
+  assert.equal(
+    typeof parsed['version'],
+    'string',
+    'The package manifest must have a version.',
+  );
+  return /** @type {PackageManifest} */ (parsed);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, string>}
+ */
+function isStringRecord(value) {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((entry) => typeof entry === 'string')
+  );
 }
