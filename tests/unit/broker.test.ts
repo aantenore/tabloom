@@ -101,9 +101,8 @@ describe('in-memory broker cluster', () => {
     const failedStart = broker.start();
     expect(broker.start()).toBe(failedStart);
     await expect(failedStart).rejects.toMatchObject({
-      code: 'CAPABILITY_UNAVAILABLE',
-      message:
-        'The broker could not start with the configured browser capabilities.',
+      code: 'START_FAILED',
+      message: 'The broker could not start.',
     });
     expect(attempts).toBe(1);
     expect(broker.snapshot).toMatchObject({

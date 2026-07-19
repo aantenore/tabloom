@@ -171,18 +171,39 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
         () => this.#sendPresence(),
         this.config.heartbeatIntervalMs,
       );
-      const electionTask = this.#dependencies.election.start(async (lease) =>
-        this.#holdLeadership(lease),
+      const electionTask = this.#dependencies.election.start(
+        async (lease) => this.#holdLeadership(lease),
+        (error) => {
+          void this.#handleElectionFailure(error);
+        },
       );
       this.#electionTask = electionTask;
       await electionTask;
       this.#record({ kind: 'broker_started' });
       this.#notify();
     } catch (error) {
-      await this.#rollbackStart();
+      const rollbackError = await this.#rollbackStart();
+      if (rollbackError !== undefined) {
+        this.#terminated = true;
+        this.#dependencies.transport.close();
+        throw new TabLoomError(
+          'START_FAILED',
+          'Broker startup failed and cleanup could not be verified.',
+          {},
+          {
+            cause: new AggregateError(
+              [error, rollbackError],
+              'Broker startup and rollback failed.',
+            ),
+          },
+        );
+      }
+      if (error instanceof TabLoomError) {
+        throw error;
+      }
       throw new TabLoomError(
-        'CAPABILITY_UNAVAILABLE',
-        'The broker could not start with the configured browser capabilities.',
+        'START_FAILED',
+        'The broker could not start.',
         {},
         error instanceof Error ? { cause: error } : undefined,
       );
@@ -302,7 +323,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     }
   }
 
-  async #rollbackStart(): Promise<void> {
+  async #rollbackStart(): Promise<unknown | undefined> {
     this.#started = false;
     if (this.#presenceHandle !== undefined) {
       this.#dependencies.clock.clearInterval(this.#presenceHandle);
@@ -315,10 +336,11 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     this.#unsubscribeTransport?.();
     this.#unsubscribeTransport = undefined;
     this.#abortOwnerWorkForLeaseLoss();
+    let cleanupError: unknown | undefined;
     try {
       await this.#dependencies.election.stop();
-    } catch {
-      // Preserve the startup failure while still returning to a retryable state.
+    } catch (error) {
+      cleanupError = error;
     }
     this.#electionTask = undefined;
     this.#leader = undefined;
@@ -326,6 +348,7 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
     this.#knownPeers.clear();
     this.#machine = transitionBrokerState(this.#machine, { type: 'stop' });
     this.#notify();
+    return cleanupError;
   }
 
   #handleRawEnvelope(input: unknown): void {
@@ -433,6 +456,37 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
         });
         this.#notify();
       }
+    }
+  }
+
+  async #handleElectionFailure(error: unknown): Promise<void> {
+    if (!this.#started) {
+      return;
+    }
+    const safeError =
+      error instanceof TabLoomError
+        ? error
+        : new TabLoomError(
+            'START_FAILED',
+            'The ownership campaign failed.',
+            {},
+            error instanceof Error ? { cause: error } : undefined,
+          );
+    for (const requestId of [...this.#pendingClients.keys()]) {
+      const pending = this.#pendingClients.get(requestId);
+      pending?.session.stop(safeError);
+      this.#terminalCount += pending === undefined ? 0 : 1;
+      this.#deletePendingClient(requestId);
+    }
+    this.#record({ kind: 'broker_failed', reason: safeError.code });
+    this.#notify({
+      at: this.#dependencies.clock.now(),
+      type: 'failed',
+    });
+    try {
+      await this.stop();
+    } catch {
+      // stop() already performs its terminal cleanup in a finally block.
     }
   }
 
@@ -884,9 +938,11 @@ export class TabLoomBroker<TRequest, TChunk, TResult> {
         TabLoomErrorCode,
         | 'BROKER_STOPPED'
         | 'CAPABILITY_UNAVAILABLE'
+        | 'EPOCH_JOURNAL_FAILED'
         | 'INVALID_CONFIG'
         | 'NO_LEADER'
         | 'RUNTIME_MISMATCH'
+        | 'START_FAILED'
       >;
       readonly message: string;
     },

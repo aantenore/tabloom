@@ -184,6 +184,24 @@ describe('browser adapters', () => {
     await expect(election.stop()).rejects.toThrow('epoch failed');
   });
 
+  it('reports asynchronous campaign failure through the broker callback', async () => {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: { locks: new ImmediateLockManager() },
+    });
+    const election = new BrowserWebLockElection('test', {
+      advance: () => Promise.reject(new Error('journal unavailable')),
+    });
+    const failure = new Promise<unknown>((resolve) => {
+      void election.start(() => Promise.resolve(), resolve);
+    });
+
+    await expect(failure).resolves.toMatchObject({
+      message: 'journal unavailable',
+    });
+    await expect(election.stop()).resolves.toBeUndefined();
+  });
+
   it('moves validated messages between native channels', async () => {
     const namespace = `test-${crypto.randomUUID()}`;
     const first = new BrowserBroadcastTransport(namespace);

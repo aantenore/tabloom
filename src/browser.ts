@@ -7,10 +7,8 @@ import { TabLoomBroker } from './core/broker.js';
 import { parseBrokerConfig, type BrokerConfigInput } from './core/config.js';
 import type { InferenceAdapter, TelemetryPort } from './core/types.js';
 import { BrowserBroadcastTransport } from './browser/broadcast-channel-transport.js';
-import {
-  BrowserStorageEpochStore,
-  BrowserWebLockElection,
-} from './browser/web-lock-election.js';
+import { BrowserWebLockElection } from './browser/web-lock-election.js';
+import { IndexedDbEpochStore } from './browser/indexeddb-epoch-store.js';
 
 export interface BrowserBrokerOptions<TRequest, TChunk, TResult> {
   readonly adapter: InferenceAdapter<TRequest, TChunk, TResult>;
@@ -28,7 +26,7 @@ export function createBrowserBroker<TRequest, TChunk, TResult>(
     clock: new SystemClock(),
     election: new BrowserWebLockElection(
       namespace,
-      new BrowserStorageEpochStore(namespace),
+      new IndexedDbEpochStore(namespace, config.runtimeFingerprint),
     ),
     ids: new CryptoIdProvider(),
     telemetry: options.telemetry ?? new NoopTelemetry(),
@@ -42,3 +40,7 @@ export {
   BrowserWebLockElection,
   type EpochStore,
 } from './browser/web-lock-election.js';
+export {
+  IndexedDbEpochStore,
+  type IndexedDbEpochStoreOptions,
+} from './browser/indexeddb-epoch-store.js';

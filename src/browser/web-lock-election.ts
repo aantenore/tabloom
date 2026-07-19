@@ -2,7 +2,7 @@ import { TabLoomError } from '../core/errors.js';
 import type { ElectionPort, LeadershipLease } from '../core/types.js';
 
 export interface EpochStore {
-  advance(): number;
+  advance(): number | Promise<number>;
 }
 
 export class BrowserStorageEpochStore implements EpochStore {
@@ -69,7 +69,10 @@ export class BrowserWebLockElection implements ElectionPort {
     this.#epochStore = epochStore;
   }
 
-  start(listener: (lease: LeadershipLease) => Promise<void>): Promise<void> {
+  start(
+    listener: (lease: LeadershipLease) => Promise<void>,
+    onFailure?: (error: unknown) => void,
+  ): Promise<void> {
     if (this.#started) {
       return Promise.resolve();
     }
@@ -98,7 +101,7 @@ export class BrowserWebLockElection implements ElectionPort {
           }
           const leaderAbort = new AbortController();
           this.#leaderAbort = leaderAbort;
-          const epoch = this.#epochStore.advance();
+          const epoch = await this.#epochStore.advance();
           try {
             await listener({ epoch, signal: leaderAbort.signal });
           } finally {
@@ -108,7 +111,10 @@ export class BrowserWebLockElection implements ElectionPort {
       )
       .catch((error: unknown) => {
         if (!isAbortError(error)) {
-          throw error;
+          if (onFailure === undefined) {
+            throw error;
+          }
+          onFailure(error);
         }
       });
     void this.#campaignTask.catch(() => undefined);

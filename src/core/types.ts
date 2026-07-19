@@ -40,7 +40,10 @@ export interface LeadershipLease {
 }
 
 export interface ElectionPort {
-  start(listener: (lease: LeadershipLease) => Promise<void>): Promise<void>;
+  start(
+    listener: (lease: LeadershipLease) => Promise<void>,
+    onFailure?: (error: unknown) => void,
+  ): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -70,6 +73,7 @@ export type SafeTelemetryEvent = Readonly<{
     | 'adapter_failed'
     | 'admission_rejected'
     | 'broker_started'
+    | 'broker_failed'
     | 'broker_stopped'
     | 'chunk_emitted'
     | 'leader_acquired'

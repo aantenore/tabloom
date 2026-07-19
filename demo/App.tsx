@@ -267,8 +267,10 @@ function statusForError(code: TabLoomError['code']): string {
       return 'adapter failed';
     case 'BROKER_STOPPED':
     case 'CAPABILITY_UNAVAILABLE':
+    case 'EPOCH_JOURNAL_FAILED':
     case 'INVALID_CONFIG':
     case 'NO_LEADER':
+    case 'START_FAILED':
       return 'failed';
   }
 }
