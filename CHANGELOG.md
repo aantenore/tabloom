@@ -2,6 +2,25 @@
 
 All notable changes are documented here.
 
+## [0.4.0-alpha.1] - 2026-07-22
+
+### Added
+
+- Verified Vite/WebLLM consumer starter that imports only public package exports and shares one immutable runtime manifest between the page and SharedWorker.
+- Package smoke gate that installs the freshly packed TabLoom archive into an isolated starter copy and builds the resulting application.
+- Opt-in Chrome/WebGPU starter gate for the pinned provider, model artifacts, owner handshake, streaming path, and one real generation.
+
+### Changed
+
+- CI now type-checks and lints the starter, pins third-party workflow actions to immutable revisions, and uses a hardened release checkout.
+- The development dependency graph overrides esbuild to a patched release.
+- The README now explains TabLoom's user impact, concrete multi-tab behavior, and alpha boundaries before the technical architecture.
+
+### Boundaries
+
+- The checked-in starter keeps its independently verified published-package, provider, and model pins; it is not a compatibility claim for arbitrary WebLLM releases, models, browsers, or GPUs.
+- TabLoom coordinates same-origin browser contexts but does not supply the model runtime or create an authorization boundary between scripts on that origin.
+
 ## [0.3.0-alpha.2] - 2026-07-19
 
 ### Changed

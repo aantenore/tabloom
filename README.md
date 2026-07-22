@@ -80,8 +80,8 @@ flowchart LR
 The alpha is distributed as a GitHub release archive rather than an npm registry publication.
 
 ```bash
-curl -LO https://github.com/aantenore/tabloom/releases/download/v0.3.0-alpha.2/tabloom-0.3.0-alpha.2.tgz
-pnpm add ./tabloom-0.3.0-alpha.2.tgz
+curl -LO https://github.com/aantenore/tabloom/releases/download/v0.4.0-alpha.1/tabloom-0.4.0-alpha.1.tgz
+pnpm add ./tabloom-0.4.0-alpha.1.tgz
 ```
 
 Verify the adjacent `.sha256` asset before installing in a controlled delivery pipeline.

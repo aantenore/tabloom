@@ -14,4 +14,6 @@ TabLoom coordinates contexts within one browser storage partition and origin. It
 
 ## Current audit posture
 
-The production dependency audit reports no known vulnerability at the release threshold. The development graph currently carries one low-severity [esbuild advisory](https://github.com/advisories/GHSA-g7r4-m6w7-qqqr) affecting a Windows development server exposed to untrusted clients. The demo server is fixed to loopback, CI does not expose it publicly, and the dependency will be updated when the Vite toolchain supports the patched esbuild line.
+The `0.4.0-alpha.1` release gate reports no known vulnerability in the current dependency graph. CI also runs the production dependency audit at the high-severity threshold for every change. This is point-in-time package-manager evidence, not a guarantee that a dependency will remain vulnerability-free.
+
+The demo and preview servers bind to loopback for repository tests. Do not expose a development server to untrusted networks as a production deployment.
